@@ -1,73 +1,123 @@
 # FndZlda
 
-Terminal hunter for the **Nintendo Switch 2 – The Legend of Zelda – 40th Anniversary Edition** console and the matching **Pro Controller**.
+A little terminal app that watches **US stores** for the **Nintendo Switch 2 Zelda 40th Anniversary** console and/or the matching **Pro Controller**. When one actually goes on sale, it opens **your normal browser**, tries to **add it to the cart**, then jumps to **checkout**.
 
-Runs on **Linux** and **Windows** (Python 3.10+, stdlib only). On a real in-stock hit it opens your **default browser** to the retailer’s add-to-cart link, then checkout.
+United States only. Nintendo, Best Buy, Target, Walmart, GameStop, Amazon.
 
-Startup is the N64 **Ocarina of Time** title card, in terminal art.
+It greets you with the old **Ocarina of Time** logo in the terminal. That is on purpose.
 
-## Hunt
+---
 
-```text
-python -m fndzlda
-```
+## What you do
 
-It asks:
+1. Start it.
+2. It asks: **console**, **Zelda Pro Controller**, or **both**.
+3. Leave the window open.
+4. When it finds one, your browser pops up. Finish paying like a normal checkout.
 
-1. Console only ($519.99)
-2. Zelda Pro Controller ($99.99)
-3. Both
+Be already signed in to the store websites (Best Buy, Target, Walmart, etc.) in that same browser. The app cannot type your password.
 
-Then it scans, on a polite interval:
+---
 
-| Shop | Console | Pro Controller |
-|---|---|---|
-| Nintendo | SKU 121642 | SKU 127074 |
-| Best Buy | 6691841 | 6691849 |
-| Target | TCIN 1013322047 | 1013213521 |
-| Walmart | 21002656445 | 20954470204 |
-| GameStop | 20037854 | 20037855 |
-| Amazon | UPC 045496885434 | 045496886325 |
+## Install on Windows (the easy way)
 
-A listing is treated as buyable only when **all** of these hold:
+You only need Python. Nothing else to pip-install.
 
-- The page is the Zelda **40th** Switch **2** SKU (PowerA, OLED, carrying case, amiibo are rejected)
-- A buy / pre-order signal beats sold-out / coming-soon
-- Price is under a cap so marketplace scalpers do not fire the browser
+1. Go to [https://www.python.org/downloads/](https://www.python.org/downloads/)
+2. Download Python and run the installer.
+3. **Check the box that says “Add python.exe to PATH.”** Then click Install.
+4. Open [https://github.com/Memberoffoxhound/FndZlda](https://github.com/Memberoffoxhound/FndZlda)
+5. Click the green **Code** button → **Download ZIP**
+6. Unzip the folder (right-click → Extract All). Open the unzipped `FndZlda` folder.
+7. Double-click **`fndzlda.cmd`**
+8. A black window appears with the Zelda logo. Type **1**, **2**, or **3** and press Enter.
 
-On a hit: beep, desktop ping if available, **add to cart** URL, then **checkout** URL in the default browser. The same shop+SKU is not opened twice unless you pass `--again`.
+Leave that window running. Minimize it if you want. Close it only when you are done hunting.
 
-## Flags
+If Windows says “Python was not found,” you skipped the PATH checkbox. Reinstall Python and check that box.
 
-```text
-python -m fndzlda --want both
-python -m fndzlda --want console --once --dry-run
-python -m fndzlda --want controller --interval 15
-python -m fndzlda --no-banner
-```
+---
 
-| Flag | Meaning |
-|---|---|
-| `--want console\|controller\|both` | Skip the prompt |
-| `--interval N` | Seconds between scans (default 20) |
-| `--once` | One pass, then exit |
-| `--dry-run` | Print cart/checkout URLs, do not open a browser |
-| `--again` | Fire even if this listing already hit |
+## Install on Linux
 
-Windows: `py -3 -m fndzlda` from this folder, or `fndzlda.cmd`.
+Open a terminal:
 
-You still need to be signed in at that shop for checkout to complete. Nintendo in particular will not add to cart from a cold GET; the product page is opened so you can finish the click.
-
-## Install
-
-No third-party packages.
-
-```text
+```bash
 git clone https://github.com/Memberoffoxhound/FndZlda.git
 cd FndZlda
-python -m fndzlda
+python3 -m fndzlda
 ```
 
-```text
-python -m unittest discover -s tests -v
+No extra packages. If `git` is missing: download the ZIP from GitHub, unzip, then:
+
+```bash
+cd ~/Downloads/FndZlda-main
+python3 -m fndzlda
 ```
+
+On this machine the folder is already here:
+
+```bash
+cd /home/deck/FndZlda && python3 -m fndzlda
+```
+
+---
+
+## The question it asks
+
+```
+  [1] Console only          ($519.99)
+  [2] Zelda Pro Controller  ($99.99)
+  [3] Both
+```
+
+Type the number. Press Enter.
+
+---
+
+## If it finds one
+
+- The terminal prints **HIT**
+- It beeps
+- Your default browser opens the store cart, then checkout
+- You still click the final **Place order** / **Pay** button. That is you, not the bot.
+
+It will not keep opening the same store over and over. To force it again, start with `--again`.
+
+---
+
+## Extra buttons (optional)
+
+Most people can ignore this. Double-click `fndzlda.cmd` (Windows) or run `python3 -m fndzlda` (Linux) is enough.
+
+| You type this | What it does |
+|---|---|
+| `--want both` | Skip the 1/2/3 question; hunt both |
+| `--want console` | Console only |
+| `--want controller` | Pro Controller only |
+| `--once` | Check once, then quit (good for a test) |
+| `--dry-run` | Print the cart links but **do not** open the browser |
+
+Example test (no shopping):
+
+```bash
+python3 -m fndzlda --want both --once --dry-run
+```
+
+---
+
+## US only
+
+Pages, prices, and checkout links are **US retail**. It will not hunt Canada, UK, Japan, etc.
+
+---
+
+## It is picky on purpose
+
+It ignores PowerA knockoffs, carrying cases, OLED (that’s Switch 1), and scalper prices. It wants the real Zelda 40th Switch 2 hardware.
+
+---
+
+## Stop
+
+Click the terminal and press **Ctrl+C**, or just close the window.
