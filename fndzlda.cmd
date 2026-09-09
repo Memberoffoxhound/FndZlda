@@ -1,5 +1,4 @@
 @echo off
-setlocal
+setlocal EnableExtensions
 cd /d "%~dp0"
-py -3 -m fndzlda %*
-if errorlevel 9009 python -m fndzlda %*
+call "%~dp0install.bat" %*

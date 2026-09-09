@@ -5,8 +5,6 @@ package main
 
 import (
 	"archive/zip"
-	"bytes"
-	"embed"
 	"fmt"
 	"io"
 	"io/fs"
@@ -21,7 +19,12 @@ import (
 //go:embed payload/fndzlda/*.py
 var payload embed.FS
 
-const pyURL = "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip"
+var pyURLs = []string{
+	"https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
+	"https://www.python.org/ftp/python/3.12.7/python-3.12.7-embed-amd64.zip",
+	"https://www.python.org/ftp/python/3.12.6/python-3.12.6-embed-amd64.zip",
+	"https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip",
+}
 
 func main() {
 	base := filepath.Join(os.Getenv("LOCALAPPDATA"), "FndZlda")
@@ -41,7 +44,7 @@ func main() {
 	}
 	py, err := ensurePython(pyDir)
 	if err != nil {
-		fail("could not install Python: %v\n  Download Python yourself from https://www.python.org/downloads/\n  Check 'Add python.exe to PATH', then run FndZlda.exe again.", err)
+		fail("could not install Python: %v\n  Download Python yourself from https://www.python.org/downloads/windows/\n  Check 'Add python.exe to PATH', then run FndZlda.exe again.", err)
 	}
 
 	fmt.Println("  TAKE THIS!  launching the hunt...")
@@ -56,6 +59,7 @@ func main() {
 		"PYTHONUTF8=1",
 		"PYTHONIOENCODING=utf-8",
 		"PYTHONPATH="+appDir,
+		"PYTHONDONTWRITEBYTECODE=1",
 	)
 	if args := os.Args[1:]; len(args) > 0 {
 		cmd.Args = append(cmd.Args, args...)
@@ -72,11 +76,6 @@ func extractApp(appDir string) error {
 	pkg := filepath.Join(appDir, "fndzlda")
 	if err := os.MkdirAll(pkg, 0o755); err != nil {
 		return err
-	}
-	// Keep files the hunter already pulled from GitHub. First run unpacks the embed.
-	if st, err := os.Stat(filepath.Join(pkg, "__init__.py")); err == nil && st.Size() > 0 {
-		fmt.Println("  Hunter already on disk.")
-		return nil
 	}
 	return fs.WalkDir(payload, "payload/fndzlda", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -96,39 +95,106 @@ func extractApp(appDir string) error {
 
 func ensurePython(pyDir string) (string, error) {
 	exe := filepath.Join(pyDir, "python.exe")
-	if st, err := os.Stat(exe); err == nil && st.Size() > 0 {
+	if pythonWorks(exe) {
+		_ = enableSite(pyDir)
 		fmt.Println("  Python already on disk.")
 		return exe, nil
 	}
-	fmt.Println("  No Python yet. Downloading a portable copy (US python.org)...")
+
+	if sysPy := systemPython(); sysPy != "" {
+		fmt.Println("  Using Python already on this PC.")
+		return sysPy, nil
+	}
+
+	fmt.Println("  No Python yet. Downloading a portable copy (python.org)...")
+	_ = os.RemoveAll(pyDir)
 	if err := os.MkdirAll(pyDir, 0o755); err != nil {
 		return "", err
 	}
 	zipPath := filepath.Join(pyDir, "python-embed.zip")
-	if err := download(pyURL, zipPath); err != nil {
-		return "", err
-	}
-	if err := unzip(zipPath, pyDir); err != nil {
-		return "", err
+	var last error
+	for _, url := range pyURLs {
+		fmt.Printf("  trying %s\n", url)
+		last = download(url, zipPath)
+		if last != nil {
+			fmt.Printf("  download failed: %v\n", last)
+			continue
+		}
+		if last = unzip(zipPath, pyDir); last != nil {
+			fmt.Printf("  unzip failed: %v\n", last)
+			continue
+		}
+		break
 	}
 	_ = os.Remove(zipPath)
+	if last != nil {
+		if wp := tryWinget(); wp != "" {
+			return wp, nil
+		}
+		return "", last
+	}
 	if err := enableSite(pyDir); err != nil {
 		return "", err
 	}
-	if _, err := os.Stat(exe); err != nil {
-		return "", fmt.Errorf("python.exe missing after unzip")
+	if !pythonWorks(exe) {
+		if wp := tryWinget(); wp != "" {
+			return wp, nil
+		}
+		return "", fmt.Errorf("portable python.exe did not start after unzip")
 	}
 	fmt.Println("  Portable Python is ready.")
 	return exe, nil
 }
 
+func pythonWorks(exe string) bool {
+	st, err := os.Stat(exe)
+	if err != nil || st.Size() == 0 {
+		return false
+	}
+	cmd := exec.Command(exe, "-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)")
+	cmd.Env = append(os.Environ(), "PYTHONUTF8=1")
+	return cmd.Run() == nil
+}
+
+func systemPython() string {
+	for _, c := range [][]string{
+		{"py", "-3"},
+		{"python"},
+		{"python3"},
+	} {
+		args := append(c, "-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)")
+		cmd := exec.Command(args[0], args[1:]...)
+		if cmd.Run() == nil {
+			path, err := exec.LookPath(c[0])
+			if err == nil {
+				if c[0] == "py" {
+					return path
+				}
+				return path
+			}
+			return c[0]
+		}
+	}
+	return ""
+}
+
+func tryWinget() string {
+	fmt.Println("  Trying winget to install Python 3.12 for this user...")
+	cmd := exec.Command("winget", "install", "-e", "--id", "Python.Python.3.12",
+		"--accept-package-agreements", "--accept-source-agreements", "--scope", "user", "--disable-interactivity")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	_ = cmd.Run()
+	return systemPython()
+}
+
 func download(url, dest string) error {
-	client := &http.Client{Timeout: 3 * time.Minute}
+	client := &http.Client{Timeout: 4 * time.Minute}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "FndZlda-installer")
+	req.Header.Set("User-Agent", "FndZlda-installer/1.1")
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -146,6 +212,9 @@ func download(url, dest string) error {
 	if err != nil {
 		return err
 	}
+	if n < 1_000_000 {
+		return fmt.Errorf("download too small (%d bytes)", n)
+	}
 	fmt.Printf("  downloaded %d MB\n", n/1024/1024)
 	return nil
 }
@@ -158,7 +227,8 @@ func unzip(src, dest string) error {
 	defer r.Close()
 	for _, f := range r.File {
 		out := filepath.Join(dest, f.Name)
-		if !strings.HasPrefix(filepath.Clean(out), filepath.Clean(dest)+string(os.PathSeparator)) && filepath.Clean(out) != filepath.Clean(dest) {
+		cleanDest := filepath.Clean(dest) + string(os.PathSeparator)
+		if !strings.HasPrefix(filepath.Clean(out)+string(os.PathSeparator), cleanDest) && filepath.Clean(out) != filepath.Clean(dest) {
 			return fmt.Errorf("bad zip path %s", f.Name)
 		}
 		if f.FileInfo().IsDir() {
@@ -190,20 +260,27 @@ func unzip(src, dest string) error {
 }
 
 func enableSite(pyDir string) error {
+	_ = os.MkdirAll(filepath.Join(pyDir, "Lib", "site-packages"), 0o755)
 	matches, _ := filepath.Glob(filepath.Join(pyDir, "python*._pth"))
+	body := "python312.zip\n.\nLib\nLib\\site-packages\nimport site\n"
 	for _, p := range matches {
-		b, err := os.ReadFile(p)
-		if err != nil {
+		name := strings.ToLower(filepath.Base(p))
+		switch {
+		case strings.Contains(name, "311"):
+			body = "python311.zip\n.\nLib\nLib\\site-packages\nimport site\n"
+		case strings.Contains(name, "313"):
+			body = "python313.zip\n.\nLib\nLib\\site-packages\nimport site\n"
+		case strings.Contains(name, "314"):
+			body = "python314.zip\n.\nLib\nLib\\site-packages\nimport site\n"
+		default:
+			body = "python312.zip\n.\nLib\nLib\\site-packages\nimport site\n"
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 			return err
 		}
-		s := string(b)
-		s = strings.ReplaceAll(s, "#import site", "import site")
-		if !bytes.Contains([]byte(s), []byte("import site")) {
-			s += "\nimport site\n"
-		}
-		if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
-			return err
-		}
+	}
+	if len(matches) == 0 {
+		return os.WriteFile(filepath.Join(pyDir, "python312._pth"), []byte(body), 0o644)
 	}
 	return nil
 }

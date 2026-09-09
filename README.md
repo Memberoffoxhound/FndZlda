@@ -28,14 +28,14 @@ Download the EXE and double-click it. It installs a private portable Python for 
 
 1. Save **`FndZlda.exe`** somewhere easy (Desktop is fine).
 2. Double-click it. Windows may say “Windows protected your PC” — click **More info** → **Run anyway**.
-3. First run may take a minute (“It's dangerous to go alone! Setting up…”).
+3. First run may take a minute (“It's dangerous to go alone! Setting up…”). That download *is* Python.
 4. Type **1**, **2**, or **3** and press Enter.
 
 Leave the black window open.
 
-### Windows, if you already have Python
+### Windows, from the repo (`install.bat`)
 
-Unzip the repo and double-click **`install.bat`**. If Python is missing it opens python.org and tells you to check **Add python.exe to PATH**.
+Unzip or clone the repo and double-click **`install.bat`**. If Python 3.10+ is missing it now **downloads portable Python itself** into `%LOCALAPPDATA%\FndZlda\python` (curl, then PowerShell). If that fails it tries `winget` for Python 3.12. Only after that does it open python.org.
 
 ---
 
