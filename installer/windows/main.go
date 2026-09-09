@@ -5,6 +5,7 @@ package main
 
 import (
 	"archive/zip"
+	"embed"
 	"fmt"
 	"io"
 	"io/fs"
@@ -162,18 +163,17 @@ func systemPython() string {
 		{"python"},
 		{"python3"},
 	} {
-		args := append(c, "-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)")
+		args := append([]string{}, c...)
+		args = append(args, "-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)")
 		cmd := exec.Command(args[0], args[1:]...)
-		if cmd.Run() == nil {
-			path, err := exec.LookPath(c[0])
-			if err == nil {
-				if c[0] == "py" {
-					return path
-				}
-				return path
-			}
+		if cmd.Run() != nil {
+			continue
+		}
+		path, err := exec.LookPath(c[0])
+		if err != nil {
 			return c[0]
 		}
+		return path
 	}
 	return ""
 }
