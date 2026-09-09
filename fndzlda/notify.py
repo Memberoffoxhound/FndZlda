@@ -6,7 +6,6 @@ import os
 import shutil
 import subprocess
 import sys
-import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -82,21 +81,38 @@ def discord_stock(
     checkout_url: str = "",
     price: float | None = None,
 ) -> bool:
-    """Post a stock alert to Discord via webhook. Returns True if sent."""
+    """Post one hit-only stock alert with buy links. Returns True if sent.
+
+    Channel policy: Discord is for real hits (this) and the separate hourly
+    summary only — never status spam.
+    """
     url = _webhook_url()
     if not url:
         return False
-    lines = [body]
+
+    # One specific hit: shout the item, then buy links only (no digests).
+    lines = [
+        f"**HEY! LISTEN!!!**",
+        f"**{body}**",
+    ]
     if price is not None:
-        lines.append(f"Price: ${price:.2f}")
-    if product_url:
-        lines.append(f"Product: {product_url}")
-    if cart_url:
-        lines.append(f"Add to cart: {cart_url}")
+        lines.append(f"${price:.2f}")
+    lines.append("")
+    # Prefer checkout/cart as the primary buy path; product last.
     if checkout_url:
-        lines.append(f"Checkout / buy: {checkout_url}")
-    content = f"**{title}**\n" + "\n".join(lines)
-    payload = json.dumps({"content": content[:1900], "username": "FndZlda"}).encode("utf-8")
+        lines.append(f"**BUY / CHECKOUT**")
+        lines.append(checkout_url)
+        lines.append("")
+    if cart_url and cart_url != checkout_url:
+        lines.append(f"**ADD TO CART**")
+        lines.append(cart_url)
+        lines.append("")
+    if product_url and product_url not in (cart_url, checkout_url):
+        lines.append(f"**PRODUCT PAGE**")
+        lines.append(product_url)
+
+    content = "\n".join(lines).strip()[:1900]
+    payload = json.dumps({"content": content, "username": "FndZlda"}).encode("utf-8")
     req = urllib.request.Request(
         url,
         data=payload,
