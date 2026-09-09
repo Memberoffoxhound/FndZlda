@@ -1,0 +1,18 @@
+[project]
+name = "fndzlda"
+version = "1.0.0"
+description = "Hunt the Zelda 40th Anniversary Switch 2 console and Pro Controller at major US retailers."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Memberoffoxhound" }]
+
+[project.scripts]
+fndzlda = "fndzlda.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["fndzlda*"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
