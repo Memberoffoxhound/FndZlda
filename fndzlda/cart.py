@@ -9,8 +9,6 @@ rescan must not open it again or the cart stacks quantity.
 """
 from __future__ import annotations
 
-import os
-
 import time
 import webbrowser
 
@@ -99,7 +97,7 @@ def fire_browser(
     cart = add_to_cart_url(hit.listing, hit.asin)
     check = checkout_url(hit.listing, hit.asin)
     planned = [cart] if check == cart else [cart, check]
-    if dry_run or os.environ.get("FNDZLDA_NO_BROWSER", "").strip() in ("1", "true", "yes"):
+    if dry_run:
         return planned
     if cart in _opened_carts and not again:
         return []
