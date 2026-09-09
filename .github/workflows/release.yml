@@ -1,0 +1,35 @@
+name: windows-exe
+"on":
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: false
+      - name: Build FndZlda.exe
+        run: bash build-windows.sh
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FndZlda-windows
+          path: dist/FndZlda.exe
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: FndZlda v1.0.0
+          files: dist/FndZlda.exe
+          fail_on_unmatched_files: true
+          make_latest: true
+          body: Windows one-click hunter for the US Zelda 40th Switch 2 console and Pro Controller. Double-click FndZlda.exe. First run installs portable Python under LocalAppData FndZlda with no admin and no PATH changes.
