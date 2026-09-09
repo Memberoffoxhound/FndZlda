@@ -1,0 +1,39 @@
+name: windows-exe
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - name: Build FndZlda.exe
+        run: bash build-windows.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FndZlda-windows
+          path: dist/FndZlda.exe
+      - name: Publish as GitHub Release v1.0.0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          notes='Windows one-click hunter (US stores).
+
+Double-click FndZlda.exe. First run downloads a portable Python into %LOCALAPPDATA%\FndZlda — no admin, no PATH.
+
+Then: cave old man, Master Sword, scan. Miss = Zelda quote. Hit = HEY! LISTEN!!! and checkout in your browser.
+
+Direct download: https://github.com/Memberoffoxhound/FndZlda/releases/latest/download/FndZlda.exe'
+          if gh release view v1.0.0 >/dev/null 2>&1; then
+            gh release upload v1.0.0 dist/FndZlda.exe --clobber
+            gh release edit v1.0.0 --notes "$notes"
+          else
+            gh release create v1.0.0 dist/FndZlda.exe --title "FndZlda v1.0.0" --notes "$notes"
+          fi
