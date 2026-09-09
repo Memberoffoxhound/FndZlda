@@ -15,8 +15,9 @@ from fndzlda.stock import StockResult
 class TestCartUrls(unittest.TestCase):
     def test_bestbuy_click_cart(self):
         row = next(x for x in listings_for({CONSOLE}) if x.retailer == "bestbuy")
-        self.assertIn("/6691841/cart", add_to_cart_url(row))
-        self.assertIn("checkout", checkout_url(row))
+        self.assertIn("skuId=6691841", add_to_cart_url(row))
+        self.assertIn("/cart/r/add-to-cart", add_to_cart_url(row))
+        self.assertTrue(checkout_url(row).rstrip("/").endswith("/cart"))
 
     def test_amazon_asin(self):
         row = next(x for x in listings_for({CONSOLE}) if x.retailer == "amazon")

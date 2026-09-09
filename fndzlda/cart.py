@@ -33,8 +33,10 @@ def add_to_cart_url(listing: Listing, asin: str = "") -> str:
     sku = listing.sku
     extra = listing.extra
     if r == "bestbuy":
+        # api.bestbuy.com/click/.../cart is a JS stub that often fails in Discord /
+        # in-app browsers. The site add-to-cart path lands on the real cart.
         sid = extra.get("sku_id", sku)
-        return f"https://api.bestbuy.com/click/-/{sid}/cart"
+        return f"https://www.bestbuy.com/cart/r/add-to-cart?skuId={sid}"
     if r == "walmart":
         iid = extra.get("item_id", sku)
         return f"https://www.walmart.com/cart?action=add&items={iid}"
@@ -60,7 +62,8 @@ def add_to_cart_url(listing: Listing, asin: str = "") -> str:
 def checkout_url(listing: Listing, asin: str = "") -> str:
     r = listing.retailer
     if r == "bestbuy":
-        return "https://www.bestbuy.com/checkout/r/fast-track"
+        # fast-track 404s / bounces for empty carts; cart is the reliable next step
+        return "https://www.bestbuy.com/cart"
     if r == "walmart":
         return "https://www.walmart.com/checkout/"
     if r == "target":
