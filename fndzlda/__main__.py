@@ -228,17 +228,12 @@ def main(argv: list[str] | None = None) -> int:
                     print("      posted to Discord #find-zelda")
                 else:
                     print("      Discord post failed or webhook missing")
-                if not should_open_browser(k, fired, args.again):
-                    print(f"  still up  {msg}  (cart already opened, not adding another)")
-                    print(f"      -> {cart_u}")
-                    print(f"      -> {check_u}")
-                    continue
+                # Box browser stays closed — Discord/chat carry buy links only.
+                print(f"      -> {cart_u}")
+                print(f"      -> {check_u}")
+                print("      (no local browser open; Discord notification only)")
                 ping("FndZlda", msg)
-                urls = fire_browser(hit, dry_run=args.dry_run, again=args.again)
-                for u in urls:
-                    print(f"      -> {u}")
                 if not args.dry_run:
-                    print("      default browser: add-to-cart, then checkout")
                     fired.add(k)
                     _save_fired(fired)
             if args.once:
