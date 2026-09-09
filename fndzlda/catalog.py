@@ -1,8 +1,8 @@
 """Official US listings for the Zelda 40th Anniversary Switch 2 hardware.
 
 SKUs collected September 2026 from Nintendo, Best Buy, Target, Walmart,
-and GameStop. Amazon is searched by UPC because the ASIN was not stable
-at listing time.
+GameStop, and Amazon. Amazon console uses a stable ASIN; controller still
+searches by UPC until its ASIN is locked.
 """
 from __future__ import annotations
 
@@ -128,13 +128,9 @@ LISTINGS: list[Listing] = [
     Listing(
         "amazon",
         CONSOLE,
+        "B0HJ6F8L6V",
+        "https://www.amazon.com/dp/B0HJ6F8L6V",
         CONSOLE_UPC,
-        f"https://www.amazon.com/s?k={CONSOLE_UPC}&i=videogames",
-        CONSOLE_UPC,
-        {
-            "search": True,
-            "query": "Nintendo Switch 2 The Legend of Zelda 40th Anniversary Edition console",
-        },
     ),
     Listing(
         "amazon",
