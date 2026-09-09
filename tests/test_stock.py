@@ -109,6 +109,26 @@ class TestFromPage(unittest.TestCase):
         self.assertFalse(hit.in_stock)
         self.assertIn("412", hit.reason)
 
+
+    def test_walmart_out_of_stock_from_pdp(self):
+        html = (
+            "<title>Nintendo Switch 2 – The Legend of Zelda – 40th Anniversary Edition</title>"
+            '<script type="application/ld+json">'
+            '{"@type":"Product","name":"Nintendo Switch 2 The Legend of Zelda 40th Anniversary Edition",'
+            '"offers":{"@type":"Offer","price":"519.99","priceCurrency":"USD","availability":"https://schema.org/OutOfStock"}}'
+            "</script>"
+            '"availabilityStatus":"OUT_OF_STOCK"'
+        )
+        listing = Listing(
+            "walmart",
+            CONSOLE,
+            "21002656445",
+            "https://www.walmart.com/ip/Nintendo-Switch-2-The-Legend-of-Zelda-40th-Anniversary-Edition/21002656445",
+        )
+        hit = from_page(listing, html, listing.url, status=200)
+        self.assertEqual(hit.status, "SOLD_OUT")
+        self.assertFalse(hit.in_stock)
+
     def test_nintendo_coming_soon_is_not_a_hit(self):
         html = (
             "<title>Nintendo Switch 2 Pro Controller The Legend of Zelda 40th Anniversary Edition</title>"

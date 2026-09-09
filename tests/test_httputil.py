@@ -80,3 +80,55 @@ class TestFetchBestBuy(unittest.TestCase):
         urllib_fetch.assert_called_once()
         curl_fetch.assert_not_called()
         self.assertEqual(page.status, 200)
+
+
+class TestFetchWalmart(unittest.TestCase):
+    def test_walmart_falls_back_to_crawler_ua_on_perimeterx(self):
+        blocked = FetchResult(
+            url="https://www.walmart.com/ip/21002656445",
+            status=412,
+            body='{"redirectUrl":"/blocked","appId":"PX","jsClientSrc":"/px/x/init.js"}',
+            error="HTTP 412",
+        )
+        good_html = (
+            "<html><title>Nintendo Switch 2 Zelda 40th</title>"
+            + ("z" * 2000)
+            + '"availabilityStatus":"OUT_OF_STOCK","usItemId":"21002656445"'
+            + "</html>"
+        )
+        good = FetchResult(
+            url="https://www.walmart.com/ip/21002656445", status=200, body=good_html
+        )
+
+        def curl_side(url, timeout, ua=None):
+            if ua and "Googlebot" in ua:
+                return good
+            return blocked
+
+        def urllib_side(url, timeout, ua=None):
+            if ua and "Googlebot" in ua:
+                return good
+            return blocked
+
+        with patch("fndzlda.httputil._fetch_curl", side_effect=curl_side) as curl_fetch:
+            with patch("fndzlda.httputil._fetch_urllib", side_effect=urllib_side):
+                page = fetch("https://www.walmart.com/ip/21002656445")
+        self.assertEqual(page.status, 200)
+        self.assertIn("OUT_OF_STOCK", page.body)
+        # Crawler UA attempted after the wall
+        uas = [
+            (c.kwargs.get("ua") if c.kwargs else None)
+            or (c[1].get("ua") if len(c) > 1 and isinstance(c[1], dict) else None)
+            for c in curl_fetch.call_args_list
+        ]
+        self.assertTrue(any(u and "Googlebot" in u for u in uas))
+
+    def test_walmart_robot_page_is_not_usable(self):
+        from fndzlda.httputil import _walmart_usable
+
+        robot = FetchResult(
+            url="https://www.walmart.com/ip/x",
+            status=200,
+            body="<html><title>Robot or human?</title>" + ("x" * 9000) + "</html>",
+        )
+        self.assertFalse(_walmart_usable(robot))

@@ -15,6 +15,12 @@ UA = (
 )
 # Chrome UA is RST by Akamai on www.bestbuy.com; the store app UA is not.
 BB_UA = "BestBuy/21.11.0 (iPhone; iOS 18.0; Scale/3.00)"
+# Walmart PerimeterX blocks normal browser UAs with HTTP 412 / "Robot or human?".
+# Public crawler UAs still receive a usable PDP (__NEXT_DATA__ + availabilityStatus).
+WM_CRAWLER_UAS = (
+    "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+    "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)",
+)
 
 HEADERS = {
     "User-Agent": UA,
@@ -180,7 +186,38 @@ def _bestbuy_error(err: str) -> str:
     return blob or "blocked by Best Buy"
 
 
+def _walmart_usable(page: FetchResult) -> bool:
+    """True when the body looks like a real Walmart PDP, not a bot wall."""
+    if _is_wall(page.status, page.body):
+        return False
+    body = page.body or ""
+    low = body.lower()
+    if "robot or human" in low:
+        return False
+    # Soft 200 walls are short; real PDPs embed product availability JSON.
+    return "availabilitystatus" in low or '"usitemid"' in low or "usitemid" in low
+
+
 def fetch(url: str, timeout: float = 12.0) -> FetchResult:
+    if "walmart.com" in url.lower():
+        page = _fetch_urllib(url, timeout)
+        if _walmart_usable(page):
+            return page
+        via_curl = _fetch_curl(url, timeout)
+        if via_curl and _walmart_usable(via_curl):
+            return via_curl
+        last = via_curl or page
+        for ua in WM_CRAWLER_UAS:
+            via = _fetch_curl(url, timeout, ua=ua)
+            if via and _walmart_usable(via):
+                return via
+            via = _fetch_urllib(url, timeout, ua=ua)
+            if _walmart_usable(via):
+                return via
+            if via:
+                last = via
+        return last
+
     if "bestbuy.com" in url.lower():
         via_curl = _fetch_curl(url, min(timeout, 10.0), ua=BB_UA)
         if via_curl and not _is_wall(via_curl.status, via_curl.body):
