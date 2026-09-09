@@ -92,6 +92,23 @@ class TestFromPage(unittest.TestCase):
         self.assertEqual(hit.status, "ERROR")
         self.assertFalse(hit.in_stock)
 
+    def test_walmart_perimeterx_412_is_error_not_wrong_item(self):
+        html = (
+            '{"redirectUrl":"/blocked?url=Lw==","appId":"PXu6b0qd2S",'
+            '"jsClientSrc":"/px/PXu6b0qd2S/init.js",'
+            '"blockScript":"/px/PXu6b0qd2S/captcha/captcha.js?a=c"}'
+        )
+        listing = Listing(
+            "walmart",
+            CONSOLE,
+            "21002656445",
+            "https://www.walmart.com/ip/Nintendo-Switch-2-The-Legend-of-Zelda-40th-Anniversary-Edition/21002656445",
+        )
+        hit = from_page(listing, html, listing.url, status=412)
+        self.assertEqual(hit.status, "ERROR")
+        self.assertFalse(hit.in_stock)
+        self.assertIn("412", hit.reason)
+
     def test_nintendo_coming_soon_is_not_a_hit(self):
         html = (
             "<title>Nintendo Switch 2 Pro Controller The Legend of Zelda 40th Anniversary Edition</title>"

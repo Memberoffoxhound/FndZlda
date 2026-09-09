@@ -66,6 +66,11 @@ _WALL = (
     "to discuss automated access",
     "sorry! something went wrong",
     "are you a human",
+    "robot or human",
+    "captcha",
+    "/px/",
+    "blockscript",
+    '"redirecturl":"/blocked',
 )
 
 
@@ -254,7 +259,8 @@ def _bestbuy_button(html: str, sku: str = "") -> str:
 
 
 def _looks_wall(html: str, status: int) -> bool:
-    if status in (0, 403, 429, 503):
+    # 412: Walmart PerimeterX / Akamai-style bot challenges
+    if status in (0, 403, 412, 429, 503):
         if not html or len(html) < 8000:
             return True
     blob = (html or "").lower()

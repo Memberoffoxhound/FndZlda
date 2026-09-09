@@ -73,13 +73,23 @@ def _decode(raw: bytes, headers) -> str:
 def _is_wall(status: int, body: str) -> bool:
     if not (body or "").strip():
         return True
-    if status in (0, 403, 429, 503):
+    # 412: Walmart PerimeterX bot challenge JSON
+    if status in (0, 403, 412, 429, 503):
         if len(body) < 8000:
             return True
         blob = body.lower()
         return any(w in blob for w in _WALL)
     blob = body.lower()
-    return any(w in blob for w in ("to discuss automated access", "attention required! | cloudflare"))
+    return any(
+        w in blob
+        for w in (
+            "to discuss automated access",
+            "attention required! | cloudflare",
+            "robot or human",
+            '"redirecturl":"/blocked',
+            "/px/",
+        )
+    )
 
 
 def _fetch_urllib(url: str, timeout: float, ua: str | None = None) -> FetchResult:
