@@ -20,7 +20,7 @@ from fndzlda.catalog import (
     parse_shops,
 )
 from fndzlda.hunter import is_actionable, next_wait, scan
-from fndzlda.notify import ping
+from fndzlda.notify import discord_stock, ping
 from fndzlda.stock import StockResult
 from fndzlda.update import check_and_apply
 
@@ -219,6 +219,17 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"      {hit.title}")
                 ping("FndZlda", msg)
                 urls = fire_browser(hit, dry_run=args.dry_run, again=args.again)
+                cart_u = urls[0] if urls else ""
+                check_u = urls[1] if len(urls) > 1 else (urls[0] if urls else "")
+                if discord_stock(
+                    "HEY! LISTEN!!! Stock found",
+                    msg,
+                    product_url=hit.url or hit.listing.url,
+                    cart_url=cart_u,
+                    checkout_url=check_u,
+                    price=hit.price,
+                ):
+                    print("      posted to Discord #find-zelda")
                 for u in urls:
                     print(f"      -> {u}")
                 if not args.dry_run:
