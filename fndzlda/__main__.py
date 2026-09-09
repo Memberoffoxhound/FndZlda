@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 from fndzlda import __version__
-from fndzlda.banner import print_logo
+from fndzlda.banner import disappointment, hey_listen, print_logo
 from fndzlda.cart import fire_browser
 from fndzlda.catalog import CONSOLE, CONTROLLER, ITEM_LABEL, RETAILER_LABEL
 from fndzlda.hunter import is_actionable, scan
@@ -19,7 +19,7 @@ from fndzlda.stock import StockResult
 STATE_PATH = Path.home() / ".fndzlda" / "hits.json"
 
 PROMPT = """
-Hunt which Zelda 40th Anniversary Switch 2 items?
+Hunt which US Zelda 40th Anniversary Switch 2 items?
 
   [1] Console only          ($519.99)
   [2] Zelda Pro Controller  ($99.99)
@@ -95,7 +95,7 @@ def _paint(hit: StockResult) -> str:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="fndzlda",
-        description="Hunt the Zelda 40th Switch 2 console and Pro Controller at major US retailers.",
+        description="Hunt the US Zelda 40th Switch 2 console and Pro Controller (US retailers only).",
     )
     p.add_argument("--want", help="console | controller | both  (skips the prompt)")
     p.add_argument("--interval", type=float, default=20.0, help="seconds between scans (default 20)")
@@ -113,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     want = _ask_want(args.want)
     hunting = ", ".join(ITEM_LABEL[i] for i in (CONSOLE, CONTROLLER) if i in want)
     print(f"  hunting  {hunting}")
-    print(f"  shops    Nintendo · Best Buy · Target · Walmart · GameStop · Amazon")
+    print(f"  shops    US only — Nintendo · Best Buy · Target · Walmart · GameStop · Amazon")
     print(f"  interval {args.interval:.0f}s   (q + enter to quit between scans)\n")
 
     fired = set() if args.again else _load_fired()
@@ -122,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
         while True:
             scans += 1
             stamp = time.strftime("%H:%M:%S")
-            print(f"── scan {scans}  {stamp} ──")
+            print(f"\u2500\u2500 scan {scans}  {stamp} \u2500\u2500")
             results = scan(want, workers=args.workers)
             hits: list[StockResult] = []
             for hit in results:
@@ -130,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
                 if is_actionable(hit):
                     hits.append(hit)
             if not hits:
-                print("  (no buyable stock this pass)")
+                print(disappointment(scans))
             for hit in hits:
                 k = _key(hit)
                 shop = RETAILER_LABEL.get(hit.listing.retailer, hit.listing.retailer)
@@ -139,7 +139,9 @@ def main(argv: list[str] | None = None) -> int:
                 if k in fired:
                     print(f"  already opened browser for {msg}")
                     continue
-                print(f"\n  *** HIT  {msg}  ***")
+                print()
+                print(hey_listen())
+                print(f"  *** HIT  {msg}  ***")
                 if hit.title:
                     print(f"      {hit.title}")
                 ping("FndZlda", msg)
