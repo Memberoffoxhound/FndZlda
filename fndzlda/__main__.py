@@ -10,7 +10,7 @@ from pathlib import Path
 
 from fndzlda import __version__
 from fndzlda.banner import disappointment, hey_listen, print_logo
-from fndzlda.cart import fire_browser, should_open_browser
+from fndzlda.cart import add_to_cart_url, checkout_url, fire_browser, should_open_browser
 from fndzlda.catalog import (
     CONSOLE,
     CONTROLLER,
@@ -209,18 +209,14 @@ def main(argv: list[str] | None = None) -> int:
                 shop = RETAILER_LABEL.get(hit.listing.retailer, hit.listing.retailer)
                 kind = ITEM_LABEL[hit.listing.item]
                 msg = f"{shop} has {kind}"
-                if not should_open_browser(k, fired, args.again):
-                    print(f"  still up  {msg}  (cart already opened, not adding another)")
-                    continue
+                cart_u = add_to_cart_url(hit.listing, hit.asin)
+                check_u = checkout_url(hit.listing, hit.asin)
+                # Always Discord on every actionable hit — even if cart already opened.
                 print()
                 print(hey_listen())
                 print(f"  *** HIT  {msg}  ***")
                 if hit.title:
                     print(f"      {hit.title}")
-                ping("FndZlda", msg)
-                urls = fire_browser(hit, dry_run=args.dry_run, again=args.again)
-                cart_u = urls[0] if urls else ""
-                check_u = urls[1] if len(urls) > 1 else (urls[0] if urls else "")
                 if discord_stock(
                     "HEY! LISTEN!!! Stock found",
                     msg,
@@ -230,6 +226,15 @@ def main(argv: list[str] | None = None) -> int:
                     price=hit.price,
                 ):
                     print("      posted to Discord #find-zelda")
+                else:
+                    print("      Discord post failed or webhook missing")
+                if not should_open_browser(k, fired, args.again):
+                    print(f"  still up  {msg}  (cart already opened, not adding another)")
+                    print(f"      -> {cart_u}")
+                    print(f"      -> {check_u}")
+                    continue
+                ping("FndZlda", msg)
+                urls = fire_browser(hit, dry_run=args.dry_run, again=args.again)
                 for u in urls:
                     print(f"      -> {u}")
                 if not args.dry_run:
