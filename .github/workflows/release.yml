@@ -27,12 +27,12 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.1
-          name: FndZlda v1.1.1
+          tag_name: v1.1.2
+          name: FndZlda v1.1.2
           files: dist/FndZlda.exe
           fail_on_unmatched_files: true
           make_latest: true
           body: |
-            Windows installer fix: actually installs portable Python under LocalAppData\FndZlda when none is on PATH.
-            Double-click FndZlda.exe or run install.bat from a cloned repo. No admin. No PATH edits required.
+            Windows flash-close fix. First-run GitHub update no longer kills the console.
+            Double-click FndZlda.exe; the window stays open and waits for Enter if the hunter stops.
             First run may take a minute while it downloads python.org embeddable 3.12.

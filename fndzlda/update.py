@@ -22,7 +22,7 @@ from pathlib import Path
 REPO = "Memberoffoxhound/FndZlda"
 BRANCH = "main"
 API_URL = f"https://api.github.com/repos/{REPO}/commits/{BRANCH}"
-ZIP_URL = f"https://codeload.github.com/{REPO}/zip/{sha}"
+ZIP_URL = f"https://codeload.github.com/{REPO}/zip/{{sha}}"
 UA = "FndZlda"
 TIMEOUT = 12.0
 
