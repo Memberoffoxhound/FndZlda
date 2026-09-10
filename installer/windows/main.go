@@ -65,11 +65,19 @@ func main() {
 	if args := os.Args[1:]; len(args) > 0 {
 		cmd.Args = append(cmd.Args, args...)
 	}
-	if err := cmd.Run(); err != nil {
+	err = cmd.Run()
+	fmt.Println()
+	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
-			os.Exit(ee.ExitCode())
+			fmt.Fprintf(os.Stderr, "  hunter exited with code %d\n", ee.ExitCode())
+		} else {
+			fmt.Fprintf(os.Stderr, "  hunter exited: %v\n", err)
 		}
-		fail("hunter exited: %v", err)
+	}
+	fmt.Fprintln(os.Stderr, "  press Enter to close")
+	fmt.Scanln()
+	if err != nil {
+		os.Exit(1)
 	}
 }
 
