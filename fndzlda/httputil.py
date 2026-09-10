@@ -199,14 +199,28 @@ def _walmart_usable(page: FetchResult) -> bool:
 
 
 def fetch(url: str, timeout: float = 12.0) -> FetchResult:
-    if "walmart.com" in url.lower():
+    if "gamestop.com" in url.lower():
         page = _fetch_urllib(url, timeout)
-        if _walmart_usable(page):
+        if not _is_wall(page.status, page.body) and len(page.body or "") > 20000:
             return page
         via_curl = _fetch_curl(url, timeout)
-        if via_curl and _walmart_usable(via_curl):
+        if via_curl and not _is_wall(via_curl.status, via_curl.body) and len(via_curl.body or "") > 20000:
             return via_curl
         last = via_curl or page
+        for ua in WM_CRAWLER_UAS:
+            via = _fetch_curl(url, timeout, ua=ua)
+            if via and not _is_wall(via.status, via.body) and len(via.body or "") > 20000:
+                return via
+            via = _fetch_urllib(url, timeout, ua=ua)
+            if not _is_wall(via.status, via.body) and len(via.body or "") > 20000:
+                return via
+            if via:
+                last = via
+        return last
+
+    if "walmart.com" in url.lower():
+        # Prefer crawler UAs first — browser UAs flake with PerimeterX 412s.
+        last = None
         for ua in WM_CRAWLER_UAS:
             via = _fetch_curl(url, timeout, ua=ua)
             if via and _walmart_usable(via):
@@ -216,7 +230,13 @@ def fetch(url: str, timeout: float = 12.0) -> FetchResult:
                 return via
             if via:
                 last = via
-        return last
+        page = _fetch_urllib(url, timeout)
+        if _walmart_usable(page):
+            return page
+        via_curl = _fetch_curl(url, timeout)
+        if via_curl and _walmart_usable(via_curl):
+            return via_curl
+        return via_curl or page or last
 
     if "bestbuy.com" in url.lower():
         via_curl = _fetch_curl(url, min(timeout, 10.0), ua=BB_UA)

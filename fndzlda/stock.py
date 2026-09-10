@@ -267,6 +267,60 @@ def _looks_wall(html: str, status: int) -> bool:
     return any(w in blob for w in _WALL) and len(html or "") < 12000
 
 
+
+
+def _amazon_offer(html: str) -> tuple[bool, str, str]:
+    """Amazon PDP buyability using real cart controls, not page-wide text.
+
+    Amazon often shows "Pre-order now" / Buy Now chrome when quantity is
+    already gone (checkout then says unavailable). Only trust an actual
+    add-to-cart or pre-order submit control. Never use the generic
+    page-wide "add to cart" / "pre-order now" text counters for Amazon.
+    """
+    blob = html or ""
+    has_atc = bool(
+        re.search(r'id=["\']add-to-cart-button["\']', blob, re.I)
+        or re.search(r'name=["\']submit\.add-to-cart["\']', blob, re.I)
+    )
+    has_preorder_submit = bool(
+        re.search(r'name=["\']submit\.pre-order["\']', blob, re.I)
+        or re.search(r'id=["\']submit\.pre-order["\']', blob, re.I)
+    )
+    if has_atc or has_preorder_submit:
+        kind = "add-to-cart" if has_atc else "pre-order submit"
+        return True, "IN_STOCK", f"amazon {kind} present"
+
+    avails: list[str] = []
+    for m in re.finditer(r'id=["\']availability["\'][^>]*>(.*?)</div>', blob, re.I | re.S):
+        t = re.sub(r"\s+", " ", strip_tags(m.group(1))).strip()
+        if t and len(t) > 3 and "availabilityMoreDetailsIcon" not in t:
+            avails.append(t)
+    avail = " | ".join(avails[:2])
+    if avail and re.search(
+        r"currently unavailable|temporarily out of stock|(?<![a-z])out of stock(?![a-z])",
+        avail,
+        re.I,
+    ):
+        return False, "SOLD_OUT", f"amazon availability={avail[:100]!r}"
+
+    ghost = bool(
+        re.search(r'id=["\']buy-now-button["\']', blob, re.I)
+        or re.search(r'id=["\']submit\.buy-now["\']', blob, re.I)
+        or re.search(r"a-button-preorder", blob, re.I)
+        or re.search(r"pre-?order now", avail, re.I)
+        or re.search(r"will be released", avail, re.I)
+    )
+    if ghost:
+        return (
+            False,
+            "SOLD_OUT",
+            "amazon buy-now/preorder chrome without add-to-cart (ghost stock)",
+        )
+    if avail:
+        return False, "SOLD_OUT", f"amazon no add-to-cart; availability={avail[:100]!r}"
+    return False, "SOLD_OUT", "amazon no add-to-cart/pre-order submit on PDP"
+
+
 def from_page(
     listing: Listing, html: str, url: str, asin: str = "", status: int = 200
 ) -> StockResult:
@@ -311,7 +365,9 @@ def from_page(
     in_stock, status_s, reason = classify_blob(blob)
     bb_btn = _bestbuy_button(html or "", listing.sku) if listing.retailer == "bestbuy" else ""
 
-    if listing.retailer == "nintendo" and n_avail is not None:
+    if listing.retailer == "amazon":
+        in_stock, status_s, reason = _amazon_offer(html or "")
+    elif listing.retailer == "nintendo" and n_avail is not None:
         avail_s = " ".join(n_avail) if isinstance(n_avail, list) else str(n_avail)
         coming = bool(re.search(r"coming soon", avail_s, re.I))
         if coming:
