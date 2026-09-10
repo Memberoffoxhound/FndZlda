@@ -22,7 +22,7 @@ from pathlib import Path
 REPO = "Memberoffoxhound/FndZlda"
 BRANCH = "main"
 API_URL = f"https://api.github.com/repos/{REPO}/commits/{BRANCH}"
-ZIP_URL = f"https://codeload.github.com/{REPO}/zip/{{sha}}"
+ZIP_URL = f"https://codeload.github.com/{REPO}/zip/{sha}"
 UA = "FndZlda"
 TIMEOUT = 12.0
 
@@ -129,7 +129,6 @@ def apply_zipball(package: Path, blob: bytes) -> int:
             parts = Path(info.filename).parts
             if "__pycache__" in parts or info.filename.endswith(".pyc"):
                 continue
-            # FndZlda-<sha>/fndzlda/foo.py
             try:
                 idx = parts.index("fndzlda")
             except ValueError:
@@ -153,7 +152,13 @@ def restart_argv(argv: list[str] | None) -> list[str]:
 
 
 def _reexec(argv: list[str] | None) -> None:
-    os.execv(sys.executable, [sys.executable, "-m", "fndzlda", *restart_argv(argv)])
+    args = [sys.executable, "-m", "fndzlda", *restart_argv(argv)]
+    # os.execv on Windows ends THIS python.exe and starts another PID.
+    # The Go / cmd.exe launcher is waiting on the first PID, so the
+    # console closes (flash of cmd) and the new process is detached.
+    if sys.platform == "win32":
+        raise SystemExit(subprocess.call(args))
+    os.execv(sys.executable, args)
 
 
 def check_and_apply(

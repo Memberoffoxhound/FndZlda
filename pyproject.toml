@@ -1,6 +1,6 @@
 [project]
 name = "fndzlda"
-version = "1.1.1"
+version = "1.1.2"
 description = "Hunt the Zelda 40th Anniversary Switch 2 console and Pro Controller at major US retailers."
 readme = "README.md"
 requires-python = ">=3.10"
