@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
+import re
 import sys
 import time
 from pathlib import Path
@@ -73,10 +75,57 @@ Other stores keep scanning. Press Enter for 8.
 
 > """
 
+NAME_PROMPT = """
+What is your hero's name?
+
+(The Great Deku Tree insists. Link is acceptable. So is something worse.)
+
+> """
+
+TIP_PROMPT = """
+Leave Bruce a tip for building this mess?
+
+  [Y] yes, Bruce deserves rupees
+  [N] no, Bruce can eat rocks
+
+> """
+
+TIP_AMT_PROMPT = """
+How much? Dollars or rupees. Bruce is not picky.
+
+> """
+
+TRIVIA = (
+    (
+        "What is the name of the loyal fairy who yells HEY! LISTEN! in Ocarina of Time?",
+        ("navi",),
+    ),
+    (
+        "In Ocarina of Time, what instrument does young Link play?",
+        ("ocarina", "the ocarina", "ocarina of time", "fairy ocarina"),
+    ),
+    (
+        "What is the name of Link's horse in Ocarina of Time?",
+        ("epona",),
+    ),
+    (
+        "Who is the king of the Gerudo and the final boss of Ocarina of Time?",
+        ("ganondorf", "ganon", "ganondorf dragmire"),
+    ),
+    (
+        "What do you dip the Master Sword into to temper it in Ocarina of Time?",
+        ("sacred water", "water", "zora's water", "zora water", "blue fire"),
+    ),
+)
+
 
 def snap_interval(seconds: float) -> float:
     n = int(round(float(seconds) / 5.0) * 5)
     return float(min(300, max(5, n)))
+
+
+def _norm_answer(s: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
 
 
 def _ask_want(preset: str | None) -> set[str]:
@@ -176,6 +225,68 @@ def _ask_tries(preset: int | None) -> int:
         return max(1, min(40, val))
 
 
+def _ask_name() -> str:
+    while True:
+        try:
+            raw = input(NAME_PROMPT).strip()
+        except EOFError:
+            return "Link"
+        if raw:
+            return raw[:40]
+        print("  a nameless hero cannot pull the Master Sword. type something.")
+
+
+def _ask_tip() -> str:
+    while True:
+        try:
+            raw = input(TIP_PROMPT).strip().lower()
+        except EOFError:
+            return "none"
+        if raw in ("n", "no", "nope", "nah", "0"):
+            print("  Bruce sighed into a Lon Lon Milk and charged it to your tab anyway.")
+            return "none"
+        if raw in ("y", "yes", "yeah", "yep", "sure", "ok", "tip"):
+            break
+        print("  Y or N. The owl is waiting.")
+    while True:
+        try:
+            amt = input(TIP_AMT_PROMPT).strip()
+        except EOFError:
+            amt = "5"
+        if not amt:
+            print("  a number, champion. even 1 rupee.")
+            continue
+        print(f"  noted: {amt} for Bruce. (This app cannot move real money. Honor system. Don't be Ganon.)")
+        return amt
+
+
+def _ask_trivia(hero: str) -> bool:
+    q, answers = random.choice(TRIVIA)
+    print()
+    print("  ── Temple of Wisdom ──")
+    print(f"  {q}")
+    print()
+    while True:
+        try:
+            raw = input("> ").strip()
+        except EOFError:
+            raw = ""
+        if raw:
+            break
+        print("  Kaepora Gaebora will not let you skip. Answer.")
+    got = _norm_answer(raw)
+    ok = any(_norm_answer(a) == got or _norm_answer(a) in got or got in _norm_answer(a) for a in answers)
+    if ok:
+        print()
+        print(f"  !!!  {hero}! You received a Piece of Heart!  !!!")
+        print("  Navi does a little loop-de-loop. The hunt may begin.")
+        return True
+    print()
+    print(f"  Wrong. The answer was {answers[0]}.")n    print(f"  {hero} just bonked a pot and a single rupee fell out. Pathetic.")
+    print("  It's dangerous to go alone — but we are starting anyway.")
+    return False
+
+
 def _save_fired(keys: set[str]) -> None:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     STATE_PATH.write_text(json.dumps({"fired": sorted(keys)}, indent=2), encoding="utf-8")
@@ -262,12 +373,20 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_banner:
         print_logo()
 
+    hero = _ask_name()
+    tip = _ask_tip()
+    _ask_trivia(hero)
     want = _ask_want(args.want)
     shops = _ask_shops(args.shops)
     interval = _ask_interval(args.interval)
     tries = _ask_tries(args.tries)
     hunting = ", ".join(ITEM_LABEL[i] for i in (CONSOLE, CONTROLLER) if i in want)
     shop_names = " · ".join(RETAILER_LABEL[s] for s in SHOP_IDS if s in shops)
+    print(f"  hero     {hero}")
+    if tip != "none":
+        print(f"  tip      {tip} promised to Bruce (honor system)")
+    else:
+        print("  tip      Bruce got stiffed")
     print(f"  hunting  {hunting}")
     print(f"  shops    US only — {shop_names}")
     print(f"  scan every {interval:.0f}s   auto-add cooldown {args.hit_wait:.0f}s per store")
@@ -281,7 +400,7 @@ def main(argv: list[str] | None = None) -> int:
         while True:
             scans += 1
             stamp = time.strftime("%H:%M:%S")
-            print(f"── scan {scans}  {stamp} ──")
+            print(f"── scan {scans}  {stamp}  {hero} ──")
             results = scan(want, workers=args.workers, shops=shops)
             hits: list[StockResult] = []
             for hit in results:
@@ -302,12 +421,12 @@ def main(argv: list[str] | None = None) -> int:
                 check_u = checkout_url(hit.listing, hit.asin)
                 print()
                 print(hey_listen())
-                print(f"  *** HIT  {msg}  ***")
+                print(f"  *** HIT  {hero} — {msg}  ***")
                 if hit.title:
                     print(f"      {hit.title}")
                 if discord_stock(
                     "HEY! LISTEN!!! Stock found",
-                    msg,
+                    f"{hero}: {msg}",
                     product_url=hit.url or hit.listing.url,
                     cart_url=cart_u,
                     checkout_url=check_u,
@@ -342,7 +461,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  next scan in {wait:.0f}s\n")
             time.sleep(wait)
     except KeyboardInterrupt:
-        print("\n  stopped. (Ganon can wait.)")
+        print(f"\n  stopped. ({hero} sheathed the sword.)")
         return 0
 
 
