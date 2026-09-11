@@ -1,44 +1,117 @@
-"""Beep / desktop ping on a hit. Never required for the hunt to work."""
+"""Beep / desktop ping / Navi chime on a hit. Never required for the hunt to work."""
 from __future__ import annotations
 
 import json
 import os
 import shutil
+import ssl
 import subprocess
 import sys
+import threading
 import urllib.request
 from pathlib import Path
 
+_DIR = Path(__file__).resolve().parent
+CHIME_NAME = "listen.wav"
+CHIME_URL = (
+    "https://raw.githubusercontent.com/Memberoffoxhound/FndZlda/main/fndzlda/listen.wav"
+)
+
+
+def _chime_path() -> Path:
+    env = (os.environ.get("FNDZLDA_CHIME") or "").strip()
+    if env:
+        return Path(env)
+    local = os.environ.get("LOCALAPPDATA")
+    if local:
+        extra = Path(local) / "FndZlda" / CHIME_NAME
+        if extra.is_file() and extra.stat().st_size > 100:
+            return extra
+    return _DIR / CHIME_NAME
+
+
+def _download_chime(dest: Path) -> bool:
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        req = urllib.request.Request(CHIME_URL, headers={"User-Agent": "FndZlda"})
+        ctx = ssl.create_default_context()
+        with urllib.request.urlopen(req, timeout=12, context=ctx) as resp:
+            blob = resp.read()
+        if len(blob) < 100 or blob[:4] != b"RIFF":
+            return False
+        dest.write_bytes(blob)
+        return True
+    except Exception:
+        return False
+
+
+def ensure_chime() -> Path | None:
+    path = _chime_path()
+    if path.is_file() and path.stat().st_size > 100:
+        return path
+    pkg = _DIR / CHIME_NAME
+    if _download_chime(pkg):
+        return pkg
+    return None
+
+
+def play_chime() -> None:
+    """Play listen.wav in the background. Falls back to a short beep."""
+
+    def _run() -> None:
+        path = ensure_chime()
+        if path is not None and sys.platform == "win32":
+            try:
+                import winsound
+
+                winsound.PlaySound(
+                    str(path),
+                    winsound.SND_FILENAME | winsound.SND_ASYNC,
+                )
+                return
+            except Exception:
+                pass
+        if path is not None:
+            player = None
+            if sys.platform == "darwin":
+                player = ["afplay", str(path)]
+            else:
+                for bin_name in ("paplay", "aplay", "ffplay"):
+                    if shutil.which(bin_name):
+                        if bin_name == "ffplay":
+                            player = [bin_name, "-nodisp", "-autoexit", "-loglevel", "quiet", str(path)]
+                        else:
+                            player = [bin_name, str(path)]
+                        break
+            if player:
+                try:
+                    subprocess.Popen(
+                        player,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    return
+                except Exception:
+                    pass
+        try:
+            sys.stdout.write("\a")
+            sys.stdout.flush()
+        except Exception:
+            pass
+        if sys.platform == "win32":
+            try:
+                import winsound
+
+                winsound.Beep(880, 180)
+                winsound.Beep(1175, 220)
+            except Exception:
+                pass
+
+    threading.Thread(target=_run, daemon=True).start()
+
 
 def ping(title: str, body: str) -> None:
-    try:
-        sys.stdout.write("\a")
-        sys.stdout.flush()
-    except Exception:
-        pass
-    if sys.platform == "win32":
-        try:
-            import winsound
-
-            winsound.Beep(880, 180)
-            winsound.Beep(1175, 220)
-        except Exception:
-            pass
-        try:
-            subprocess.Popen(
-                [
-                    "powershell",
-                    "-NoProfile",
-                    "-Command",
-                    f"[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null; "
-                    f"Write-Host {body!r}",
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        except Exception:
-            pass
-        return
+    play_chime()
     if shutil.which("notify-send"):
         try:
             subprocess.Popen(
@@ -81,24 +154,17 @@ def discord_stock(
     checkout_url: str = "",
     price: float | None = None,
 ) -> bool:
-    """Post one hit-only stock alert with buy links. Returns True if sent.
-
-    Channel policy: Discord is for real hits (this) and the separate hourly
-    summary only — never status spam.
-    """
     url = _webhook_url()
     if not url:
         return False
 
-    # One specific hit: shout the item, then buy links only (no digests).
     lines = [
-        f"**HEY! LISTEN!!!**",
+        f"**{title}**",
         f"**{body}**",
     ]
     if price is not None:
         lines.append(f"${price:.2f}")
     lines.append("")
-    # Prefer checkout/cart as the primary buy path; product last.
     if checkout_url:
         lines.append(f"**BUY / CHECKOUT**")
         lines.append(checkout_url)
