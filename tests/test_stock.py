@@ -215,3 +215,40 @@ class TestAmazonPick(unittest.TestCase):
         asin, title = pick_amazon_asin(html, CONSOLE)
         self.assertEqual(asin, "B0ZLDA40TH")
         self.assertIn("40th", title)
+
+
+class TestAmazonOffer(unittest.TestCase):
+    listing = Listing(
+        "amazon",
+        CONSOLE,
+        "B0HJ6F8L6V",
+        "https://www.amazon.com/dp/B0HJ6F8L6V",
+    )
+
+    def test_no_atc_is_sold_out(self):
+        html = (
+            "<title>Nintendo Switch 2 The Legend of Zelda 40th Anniversary Edition</title>"
+            '<div id="availability">Currently unavailable.</div>'
+            '<form id="addToCart"><input id="offerListingID" value=""></form>'
+        )
+        hit = from_page(self.listing, html, self.listing.url, asin="B0HJ6F8L6V")
+        self.assertFalse(hit.in_stock)
+        self.assertEqual(hit.status, "SOLD_OUT")
+
+    def test_atc_without_price_still_actionable(self):
+        html = (
+            "<title>Nintendo Switch 2 The Legend of Zelda 40th Anniversary Edition</title>"
+            '<input id="add-to-cart-button" name="submit.add-to-cart" type="submit">'
+        )
+        hit = from_page(self.listing, html, self.listing.url, asin="B0HJ6F8L6V")
+        self.assertTrue(hit.in_stock)
+        self.assertEqual(hit.status, "IN_STOCK")
+        self.assertEqual(hit.price, 519.99)
+
+    def test_preorder_submit_counts(self):
+        html = (
+            "<title>Nintendo Switch 2 The Legend of Zelda 40th Anniversary Edition</title>"
+            '<input name="submit.pre-order" id="submit.pre-order" type="submit">'
+        )
+        hit = from_page(self.listing, html, self.listing.url, asin="B0HJ6F8L6V")
+        self.assertTrue(hit.in_stock)

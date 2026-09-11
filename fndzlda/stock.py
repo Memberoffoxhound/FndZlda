@@ -396,6 +396,12 @@ def from_page(
 
     if price is None and status_s in ("SOLD_OUT", "COMING_SOON"):
         price = MSRP[listing.item]
+    # Amazon PDPs often omit a parseable dollar amount until the offer hydrates.
+    # Official SKU + a real ATC/pre-order submit is enough; use MSRP so the
+    # hit is actionable instead of dying as "buy signal but no product price".
+    if in_stock and price is None and listing.retailer == "amazon":
+        price = MSRP[listing.item]
+        reason = (reason or "amazon") + f"; price defaulted to MSRP ${price:.2f}"
     if in_stock and price is None:
         in_stock, status_s, reason = False, "UNKNOWN", "buy signal but no product price"
     if in_stock and price is not None and price > cap:
