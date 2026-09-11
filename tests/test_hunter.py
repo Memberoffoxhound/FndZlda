@@ -2,7 +2,7 @@ import unittest
 
 from fndzlda.catalog import CONSOLE
 from fndzlda.httputil import FetchResult
-from fndzlda.hunter import is_actionable, scan
+from fndzlda.hunter import is_actionable, mark_shop_cooldown, scan, shop_cooldown_left
 
 
 class TestScan(unittest.TestCase):
@@ -34,11 +34,20 @@ class TestScan(unittest.TestCase):
         shops = {r.listing.retailer for r in rows}
         self.assertEqual(shops, {"walmart", "target"})
 
-    def test_next_wait_is_two_minutes_after_a_hit(self):
+    def test_next_wait_keeps_scanning_after_a_hit(self):
         from fndzlda.hunter import next_wait
 
-        self.assertEqual(next_wait(1, 20.0), 120.0)
+        self.assertEqual(next_wait(1, 20.0), 20.0)
         self.assertEqual(next_wait(0, 20.0), 20.0)
+        self.assertEqual(next_wait(3, 8.0, 120.0), 8.0)
+
+    def test_shop_cooldown_is_per_store(self):
+        until: dict[str, float] = {}
+        now = 1_000.0
+        mark_shop_cooldown("bestbuy", until, 120.0, now=now)
+        self.assertAlmostEqual(shop_cooldown_left("bestbuy", until, now=now + 1), 119.0)
+        self.assertEqual(shop_cooldown_left("walmart", until, now=now + 1), 0.0)
+        self.assertEqual(shop_cooldown_left("bestbuy", until, now=now + 120), 0.0)
 
     def test_bestbuy_transport_error_is_error_not_wrong_item(self):
         def getter(url: str) -> FetchResult:

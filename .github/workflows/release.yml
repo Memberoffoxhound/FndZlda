@@ -27,11 +27,11 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.3
-          name: FndZlda v1.1.3
+          tag_name: v1.1.4
+          name: FndZlda v1.1.4
           files: dist/FndZlda.exe
           fail_on_unmatched_files: true
           make_latest: true
           body: |
-            Fix No module named fndzlda on Windows portable Python.
-            Embeddable CPython ignores PYTHONPATH; the launcher now puts the app folder on sys.path.
+            Per-store 120s auto-add cooldown. Other shops keep scanning. Discord on every hit.
+            Best Buy opens the Pre-Order / add-to-cart button (queue or cart), not /cart.

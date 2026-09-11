@@ -10,7 +10,7 @@ from pathlib import Path
 
 from fndzlda import __version__
 from fndzlda.banner import disappointment, hey_listen, print_logo
-from fndzlda.cart import add_to_cart_url, checkout_url, fire_browser, should_open_browser
+from fndzlda.cart import add_to_cart_url, checkout_url, fire_browser
 from fndzlda.catalog import (
     CONSOLE,
     CONTROLLER,
@@ -19,7 +19,13 @@ from fndzlda.catalog import (
     SHOP_IDS,
     parse_shops,
 )
-from fndzlda.hunter import is_actionable, next_wait, scan
+from fndzlda.hunter import (
+    is_actionable,
+    mark_shop_cooldown,
+    next_wait,
+    scan,
+    shop_cooldown_left,
+)
 from fndzlda.notify import discord_stock, ping
 from fndzlda.stock import StockResult
 from fndzlda.update import check_and_apply
@@ -146,19 +152,19 @@ def main(argv: list[str] | None = None) -> int:
         "--shops",
         help="comma-separated stores, or all  (skips the store prompt). typos are ok",
     )
-    p.add_argument("--interval", type=float, default=20.0, help="seconds between misses (default 20)")
+    p.add_argument("--interval", type=float, default=20.0, help="seconds between scans (default 20)")
     p.add_argument(
         "--hit-wait",
         type=float,
         default=HIT_PAUSE,
-        help="seconds to wait after a hit, then scan every store again (default 120)",
+        help="per-store auto-add cooldown in seconds (default 120). other shops keep scanning",
     )
     p.add_argument("--once", action="store_true", help="scan once and exit")
     p.add_argument("--dry-run", action="store_true", help="print cart/checkout URLs, do not open a browser")
     p.add_argument(
         "--again",
         action="store_true",
-        help="open the cart again if the same listing is still in stock (default: once per hunt)",
+        help="ignore the per-store auto-add cooldown and open the cart on every hit",
     )
     p.add_argument("--workers", type=int, default=6)
     p.add_argument("--no-banner", action="store_true")
@@ -183,13 +189,12 @@ def main(argv: list[str] | None = None) -> int:
     shop_names = " · ".join(RETAILER_LABEL[s] for s in SHOP_IDS if s in shops)
     print(f"  hunting  {hunting}")
     print(f"  shops    US only — {shop_names}")
-    print(f"  miss wait {args.interval:.0f}s   hit wait {args.hit_wait:.0f}s")
-    print("  Ctrl+C to quit. After a hit it waits two minutes, then scans every store again.")
-    print("  Same listing is added to the cart once this hunt (use --again to add again).\n")
+    print(f"  scan every {args.interval:.0f}s   auto-add cooldown {args.hit_wait:.0f}s per store")
+    print("  Ctrl+C to quit. Hits notify every time. Auto-add cools only that store.")
+    print("  Best Buy opens the Pre-Order / add-to-cart button (queue or cart).\n")
 
-    # A new launch may add once. Do not reload yesterday's hits.json or a
-    # real drop would not open the cart. Rescans in THIS run still skip.
     fired: set[str] = set()
+    shop_until: dict[str, float] = {}
     scans = 0
     try:
         while True:
@@ -204,14 +209,16 @@ def main(argv: list[str] | None = None) -> int:
                     hits.append(hit)
             if not hits:
                 print(disappointment(scans))
+            opened_shops: set[str] = set()
+            now = time.monotonic()
             for hit in hits:
                 k = _key(hit)
-                shop = RETAILER_LABEL.get(hit.listing.retailer, hit.listing.retailer)
+                retailer = hit.listing.retailer
+                shop = RETAILER_LABEL.get(retailer, retailer)
                 kind = ITEM_LABEL[hit.listing.item]
                 msg = f"{shop} has {kind}"
                 cart_u = add_to_cart_url(hit.listing, hit.asin)
                 check_u = checkout_url(hit.listing, hit.asin)
-                # Always Discord on every actionable hit — even if cart already opened.
                 print()
                 print(hey_listen())
                 print(f"  *** HIT  {msg}  ***")
@@ -228,26 +235,29 @@ def main(argv: list[str] | None = None) -> int:
                     print("      posted to Discord #find-zelda")
                 else:
                     print("      Discord post failed or webhook missing")
-                if not should_open_browser(k, fired, args.again):
-                    print(f"  still up  {msg}  (cart already opened, not adding another)")
+                left = 0.0 if args.again else shop_cooldown_left(retailer, shop_until, now=now)
+                if left > 0:
+                    print(f"  {shop} auto-add cooling {left:.0f}s — notified, not opening cart")
                     print(f"      -> {cart_u}")
                     print(f"      -> {check_u}")
                     continue
                 ping("FndZlda", msg)
-                urls = fire_browser(hit, dry_run=args.dry_run, again=args.again)
+                urls = fire_browser(hit, dry_run=args.dry_run, again=True)
                 for u in urls:
                     print(f"      -> {u}")
-                if not args.dry_run:
+                if retailer == "bestbuy" and not args.dry_run:
+                    print("      Best Buy: Pre-Order / add-to-cart (queue or cart)")
+                elif not args.dry_run:
                     print("      default browser: add-to-cart, then checkout")
-                    fired.add(k)
-                    _save_fired(fired)
+                fired.add(k)
+                opened_shops.add(retailer)
+                _save_fired(fired)
+            for retailer in opened_shops:
+                mark_shop_cooldown(retailer, shop_until, args.hit_wait, now=now)
             if args.once:
                 return 0
             wait = next_wait(len(hits), args.interval, args.hit_wait)
-            if hits:
-                print(f"  hit. waiting {wait:.0f}s, then scanning every chosen store again. Ctrl+C to quit.\n")
-            else:
-                print(f"  next scan in {wait:.0f}s\n")
+            print(f"  next scan in {wait:.0f}s\n")
             time.sleep(wait)
     except KeyboardInterrupt:
         print("\n  stopped. (Ganon can wait.)")

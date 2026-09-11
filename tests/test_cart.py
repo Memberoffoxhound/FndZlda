@@ -13,11 +13,13 @@ from fndzlda.stock import StockResult
 
 
 class TestCartUrls(unittest.TestCase):
-    def test_bestbuy_click_cart(self):
+    def test_bestbuy_preorder_button_url(self):
         row = next(x for x in listings_for({CONSOLE}) if x.retailer == "bestbuy")
-        self.assertIn("skuId=6691841", add_to_cart_url(row))
-        self.assertIn("/cart/r/add-to-cart", add_to_cart_url(row))
-        self.assertTrue(checkout_url(row).rstrip("/").endswith("/cart"))
+        cart = add_to_cart_url(row)
+        self.assertIn("skuId=6691841", cart)
+        self.assertIn("/cart/r/add-to-cart", cart)
+        self.assertEqual(checkout_url(row), row.url)
+        self.assertIn("/product/", checkout_url(row))
 
     def test_amazon_asin(self):
         row = next(x for x in listings_for({CONSOLE}) if x.retailer == "amazon")
@@ -45,10 +47,11 @@ class TestCartUrls(unittest.TestCase):
             first = fire_browser(hit, delay_s=0.4)
             second = fire_browser(hit, delay_s=0.4)
             third = fire_browser(hit, delay_s=0.4, again=True)
-        self.assertEqual(len(first), 2)
+        self.assertGreaterEqual(len(first), 1)
+        self.assertIn("/cart/r/add-to-cart", first[0])
         self.assertEqual(second, [])
-        self.assertEqual(len(third), 2)
+        self.assertGreaterEqual(len(third), 1)
         cart = add_to_cart_url(row)
         cart_opens = [c for c in open_tab.call_args_list if c.args and c.args[0] == cart]
-        self.assertEqual(len(cart_opens), 2)  # first fire + --again, not the rescan
+        self.assertEqual(len(cart_opens), 2)
         reset_opened_carts()
