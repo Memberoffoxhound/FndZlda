@@ -20,32 +20,37 @@ _opened_carts: set[str] = set()
 _BB_PS = r"""
 Add-Type -AssemblyName UIAutomationClient
 $root = [System.Windows.Automation.AutomationElement]::RootElement
-function Find-Named($names) {
+# Never click Close / Dismiss / OK — those match Chrome's window chrome.
+$wanted = @(
+  'Pre-Order','Pre-order','Preorder','PRE-ORDER','Pre-Order Now',
+  'Add to Cart','Add to cart','Add To Cart'
+)
+function Invoke-Named($scope, $names) {
   foreach ($n in $names) {
     $c = New-Object System.Windows.Automation.PropertyCondition(
       [System.Windows.Automation.AutomationElement]::NameProperty, $n)
-    $el = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $c)
-    if ($el) { return $el }
+    $el = $scope.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $c)
+    if (-not $el) { continue }
+    try {
+      $p = $el.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+      $p.Invoke()
+      return $true
+    } catch {}
   }
-  return $null
+  return $false
 }
-function Invoke-El($el) {
-  if (-not $el) { return $false }
-  try {
-    $p = $el.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
-    $p.Invoke()
-    return $true
-  } catch { return $false }
+$scopes = New-Object System.Collections.Generic.List[Object]
+$cls = New-Object System.Windows.Automation.PropertyCondition(
+  [System.Windows.Automation.AutomationElement]::ClassNameProperty, 'Chrome_WidgetWin_1')
+foreach ($win in $root.FindAll([System.Windows.Automation.TreeScope]::Children, $cls)) {
+  $scopes.Add($win)
 }
-$closed = Invoke-El (Find-Named @('Close','close','CLOSE','Dismiss','OK','Ok'))
-Start-Sleep -Milliseconds 250
-$clicked = Invoke-El (Find-Named @(
-  'Pre-Order','Pre-order','Preorder','PRE-ORDER',
-  'Pre-Order Now','Add to Cart','Add to cart','Add To Cart'
-))
-if ($clicked) { Write-Output 'clicked' }
-elseif ($closed) { Write-Output 'closed' }
-else { Write-Output 'miss' }
+$scopes.Add($root)
+$clicked = $false
+foreach ($scope in $scopes) {
+  if (Invoke-Named $scope $wanted) { $clicked = $true; break }
+}
+if ($clicked) { Write-Output 'clicked' } else { Write-Output 'miss' }
 """
 
 
@@ -160,8 +165,6 @@ def fire_browser(
         result = _bb_click_pass()
         if result == "clicked":
             print("      Best Buy Pre-Order clicked once")
-        elif result == "closed":
-            print("      Best Buy sold-out dialog closed — cooling down")
         else:
             webbrowser.open(cart, new=2)
             print("      Best Buy Pre-Order button not seen — opened add-to-cart URL")

@@ -27,8 +27,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.20
-          name: FndZlda v1.1.20
+          tag_name: v1.1.21
+          name: FndZlda v1.1.21
           files: dist/FndZlda.exe
           fail_on_unmatched_files: true
           make_latest: true
