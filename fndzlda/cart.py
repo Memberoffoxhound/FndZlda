@@ -1,11 +1,12 @@
-"""Open the default browser to add-to-cart, then checkout.
+"""Open the default browser to add-to-cart / pre-order, then checkout.
 
 Retailers do not all expose a public GET add-to-cart. We use the official
-deep links that do exist, then the checkout URL. The shopper still has to
-be logged in for Nintendo / some carts — the browser is theirs.
+deep links that do exist. The shopper still has to be logged in for
+Nintendo / some carts — the browser is theirs.
 
-Best Buy's click-cart URL adds one unit on every visit. The two-minute
-rescan must not open it again or the cart stacks quantity.
+Best Buy's Pre-Order / Add to cart button is the skuId add-to-cart URL.
+That lands on the drop queue when Best Buy is gating, or the cart when
+it is a normal add. Do not also open /cart; that can dump the queue.
 """
 from __future__ import annotations
 
@@ -33,8 +34,7 @@ def add_to_cart_url(listing: Listing, asin: str = "") -> str:
     sku = listing.sku
     extra = listing.extra
     if r == "bestbuy":
-        # api.bestbuy.com/click/.../cart is a JS stub that often fails in Discord /
-        # in-app browsers. The site add-to-cart path lands on the real cart.
+        # Same target as the PDP Pre-Order / Add to cart button.
         sid = extra.get("sku_id", sku)
         return f"https://www.bestbuy.com/cart/r/add-to-cart?skuId={sid}"
     if r == "walmart":
@@ -62,8 +62,8 @@ def add_to_cart_url(listing: Listing, asin: str = "") -> str:
 def checkout_url(listing: Listing, asin: str = "") -> str:
     r = listing.retailer
     if r == "bestbuy":
-        # fast-track 404s / bounces for empty carts; cart is the reliable next step
-        return "https://www.bestbuy.com/cart"
+        # PDP still has the Pre-Order button if the ATC link bounced.
+        return listing.url
     if r == "walmart":
         return "https://www.walmart.com/checkout/"
     if r == "target":
@@ -89,21 +89,26 @@ def fire_browser(
     dry_run: bool = False,
     again: bool = False,
 ) -> list[str]:
-    """Open add-to-cart, then checkout, in the user's default browser.
+    """Open add-to-cart / pre-order, then checkout, in the user's default browser.
 
     The add-to-cart link is opened at most once per URL this process unless
-    again=True. Best Buy / Walmart / Target / GameStop all add a unit on GET.
+    again=True. Best Buy opens the Pre-Order button URL (queue or cart).
     """
     cart = add_to_cart_url(hit.listing, hit.asin)
     check = checkout_url(hit.listing, hit.asin)
-    planned = [cart] if check == cart else [cart, check]
+    if hit.listing.retailer == "bestbuy":
+        planned = [cart]
+        if check and check != cart:
+            planned.append(check)
+    else:
+        planned = [cart] if check == cart else [cart, check]
     if dry_run:
         return planned
     if cart in _opened_carts and not again:
         return []
     _opened_carts.add(cart)
     webbrowser.open(cart, new=2)
-    time.sleep(max(0.4, delay_s))
     if check != cart:
+        time.sleep(max(0.4, delay_s))
         webbrowser.open(check, new=2)
     return planned

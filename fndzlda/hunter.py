@@ -1,6 +1,7 @@
 """Scan every listing for the chosen items."""
 from __future__ import annotations
 
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import quote
 
@@ -73,14 +74,30 @@ def is_actionable(hit: StockResult) -> bool:
     if hit.price is None:
         return False
     if hit.title and not matches_item(hit.title, hit.listing.item):
-        # Amazon titles can be empty; SKU match already happened via UPC search.
         if hit.listing.retailer != "amazon":
             return False
     return True
 
 
 def next_wait(hit_count: int, interval: float, hit_pause: float = 120.0) -> float:
-    """After a hit, wait two minutes then scan every shop again."""
-    if hit_count > 0:
-        return max(interval, hit_pause)
+    """Seconds until the next full scan. Hits do not pause other shops."""
+    _ = hit_count, hit_pause
     return max(3.0, interval)
+
+
+def shop_cooldown_left(retailer: str, until: dict[str, float], now: float | None = None) -> float:
+    """Seconds left on this store's auto-add cooldown, or 0."""
+    t = time.monotonic() if now is None else now
+    left = float(until.get(retailer, 0.0)) - t
+    return left if left > 0 else 0.0
+
+
+def mark_shop_cooldown(
+    retailer: str,
+    until: dict[str, float],
+    pause: float,
+    now: float | None = None,
+) -> float:
+    t = time.monotonic() if now is None else now
+    until[retailer] = t + max(0.0, pause)
+    return until[retailer]
