@@ -28,7 +28,7 @@ TIMEOUT = 12.0
 
 PACKAGE = Path(__file__).resolve().parent
 COMMIT_FILE = PACKAGE / ".commit"
-_KEEP_SUFFIX = (".py", ".txt")
+_KEEP_SUFFIX = (".py", ".txt", ".wav")
 
 
 @dataclass
