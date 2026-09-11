@@ -28,6 +28,7 @@ TIMEOUT = 12.0
 
 PACKAGE = Path(__file__).resolve().parent
 COMMIT_FILE = PACKAGE / ".commit"
+_KEEP_SUFFIX = (".py", ".txt")
 
 
 @dataclass
@@ -120,7 +121,7 @@ def write_commit(package: Path, sha: str) -> None:
 
 
 def apply_zipball(package: Path, blob: bytes) -> int:
-    """Replace package *.py from a GitHub commit zip. Returns files written."""
+    """Replace package files from a GitHub commit zip. Returns files written."""
     written = 0
     with zipfile.ZipFile(io.BytesIO(blob)) as zf:
         for info in zf.infolist():
@@ -134,9 +135,12 @@ def apply_zipball(package: Path, blob: bytes) -> int:
             except ValueError:
                 continue
             rest = parts[idx + 1 :]
-            if len(rest) != 1 or not rest[0].endswith(".py") or rest[0] in (".", ".."):
+            if len(rest) != 1 or rest[0] in (".", ".."):
                 continue
-            dest = package / rest[0]
+            name = rest[0]
+            if not name.endswith(_KEEP_SUFFIX):
+                continue
+            dest = package / name
             dest.write_bytes(zf.read(info.filename))
             written += 1
     cache = package / "__pycache__"
@@ -153,9 +157,6 @@ def restart_argv(argv: list[str] | None) -> list[str]:
 
 def _reexec(argv: list[str] | None) -> None:
     args = [sys.executable, "-m", "fndzlda", *restart_argv(argv)]
-    # os.execv on Windows ends THIS python.exe and starts another PID.
-    # The Go / cmd.exe launcher is waiting on the first PID, so the
-    # console closes (flash of cmd) and the new process is detached.
     if sys.platform == "win32":
         raise SystemExit(subprocess.call(args))
     os.execv(sys.executable, args)
@@ -172,7 +173,6 @@ def check_and_apply(
     reexec=None,
     quiet: bool = False,
 ) -> UpdateResult:
-    """Fetch GitHub main. Pull or unpack if we are behind. Optionally restart."""
     if no_update or os.environ.get("FNDZLDA_NO_UPDATE"):
         return UpdateResult("skip", detail="disabled")
     pkg = package or PACKAGE
@@ -221,7 +221,7 @@ def check_and_apply(
                 zip_bytes = zip_bytes.encode("utf-8")
             n = apply_zipball(pkg, zip_bytes)
             if n < 1:
-                raise RuntimeError("zip had no fndzlda/*.py files")
+                raise RuntimeError("zip had no fndzlda package files")
         write_commit(pkg, remote)
     except Exception as e:
         result = UpdateResult("failed", local=local, remote=remote, detail=str(e))
