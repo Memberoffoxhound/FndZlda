@@ -1,12 +1,9 @@
 """Open the default browser to add-to-cart / pre-order, then checkout.
 
-Retailers do not all expose a public GET add-to-cart. We use the official
-deep links that do exist. The shopper still has to be logged in for
-Nintendo / some carts — the browser is theirs.
-
-Best Buy's Pre-Order / Add to cart button is the skuId add-to-cart URL.
-That lands on the drop queue when Best Buy is gating, or the cart when
-it is a normal add. Do not also open /cart; that can dump the queue.
+Best Buy's yellow Pre-Order button is the skuId add-to-cart URL.
+We hammer that URL N times in a row so a drop queue / cart has more
+than one chance to catch. We cannot press the DOM button inside Chrome;
+this is the same navigation that button performs.
 """
 from __future__ import annotations
 
@@ -16,7 +13,6 @@ import webbrowser
 from fndzlda.catalog import Listing
 from fndzlda.stock import StockResult
 
-# Add-to-cart URLs already opened this process. GET add-to-cart is not idempotent.
 _opened_carts: set[str] = set()
 
 
@@ -25,7 +21,6 @@ def reset_opened_carts() -> None:
 
 
 def should_open_browser(key: str, opened: set[str], again: bool = False) -> bool:
-    """False if this listing was already added to the cart this hunt."""
     return bool(again) or key not in opened
 
 
@@ -34,7 +29,6 @@ def add_to_cart_url(listing: Listing, asin: str = "") -> str:
     sku = listing.sku
     extra = listing.extra
     if r == "bestbuy":
-        # Same target as the PDP Pre-Order / Add to cart button.
         sid = extra.get("sku_id", sku)
         return f"https://www.bestbuy.com/cart/r/add-to-cart?skuId={sid}"
     if r == "walmart":
@@ -62,7 +56,6 @@ def add_to_cart_url(listing: Listing, asin: str = "") -> str:
 def checkout_url(listing: Listing, asin: str = "") -> str:
     r = listing.retailer
     if r == "bestbuy":
-        # PDP still has the Pre-Order button if the ATC link bounced.
         return listing.url
     if r == "walmart":
         return "https://www.walmart.com/checkout/"
@@ -88,16 +81,14 @@ def fire_browser(
     delay_s: float = 2.2,
     dry_run: bool = False,
     again: bool = False,
+    tries: int = 1,
 ) -> list[str]:
-    """Open add-to-cart / pre-order, then checkout, in the user's default browser.
-
-    The add-to-cart link is opened at most once per URL this process unless
-    again=True. Best Buy opens the Pre-Order button URL (queue or cart).
-    """
+    """Open add-to-cart / pre-order. Best Buy repeats the button URL `tries` times."""
     cart = add_to_cart_url(hit.listing, hit.asin)
     check = checkout_url(hit.listing, hit.asin)
+    burst = max(1, int(tries))
     if hit.listing.retailer == "bestbuy":
-        planned = [cart]
+        planned = [cart] * burst
         if check and check != cart:
             planned.append(check)
     else:
@@ -107,6 +98,16 @@ def fire_browser(
     if cart in _opened_carts and not again:
         return []
     _opened_carts.add(cart)
+    if hit.listing.retailer == "bestbuy":
+        gap = 0.35
+        for i in range(burst):
+            webbrowser.open(cart, new=2)
+            if i + 1 < burst:
+                time.sleep(gap)
+        if check != cart:
+            time.sleep(max(0.4, min(delay_s, 1.2)))
+            webbrowser.open(check, new=2)
+        return planned
     webbrowser.open(cart, new=2)
     if check != cart:
         time.sleep(max(0.4, delay_s))
