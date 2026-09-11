@@ -28,7 +28,7 @@ from fndzlda.hunter import (
     scan,
     shop_cooldown_left,
 )
-from fndzlda.notify import discord_stock, ping
+from fndzlda.notify import discord_stock, ping, play_hunt_theme
 from fndzlda.stock import StockResult
 from fndzlda.update import check_and_apply
 
@@ -417,6 +417,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  scan every {interval:.0f}s   auto-add cooldown {args.hit_wait:.0f}s per store")
     print(f"  Best Buy Pre-Order burst  {tries}x")
     print("  Ctrl+C to quit. Hits notify every time. Auto-add cools only that store.\n")
+    play_hunt_theme()
 
     fired: set[str] = set()
     shop_until: dict[str, float] = {}
