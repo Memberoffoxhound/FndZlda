@@ -45,6 +45,11 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+copy /Y "%~dp0fndzlda\*.txt" "%APPDIR%\fndzlda\" >nul 2>&1
+copy /Y "%~dp0fndzlda\*.wav" "%APPDIR%\fndzlda\" >nul 2>&1
+copy /Y "%~dp0fndzlda\*.mp3" "%APPDIR%\fndzlda\" >nul 2>&1
+if not exist "%APPDIR%\fndzlda\listen.wav" call :dl "https://raw.githubusercontent.com/Memberoffoxhound/FndZlda/main/fndzlda/listen.wav" "%APPDIR%\fndzlda\listen.wav"
+if not exist "%APPDIR%\fndzlda\storms.mp3" call :dl "https://raw.githubusercontent.com/Memberoffoxhound/FndZlda/main/fndzlda/storms.mp3" "%APPDIR%\fndzlda\storms.mp3"
 
 set "PYTHONUTF8=1"
 set "PYTHONIOENCODING=utf-8"
