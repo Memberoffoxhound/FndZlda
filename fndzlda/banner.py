@@ -4,6 +4,8 @@ from __future__ import annotations
 import os
 import sys
 
+from fndzlda.stamp import banner_line
+
 GOLD = "\033[38;5;220m"
 GOLD2 = "\033[38;5;178m"
 GOLD_BRIGHT = "\033[1;38;5;227m"
@@ -97,6 +99,7 @@ def render(color: bool | None = None, unicode: bool | None = None) -> str:
         f"{gb}                 O C A R I N A   O F   T I M E{r}",
         f"{d}        ---------------------------------------------{r}",
         f"{g2}              FndZlda{r}{d}  ·  Switch 2 Zelda 40th hunter{r}",
+        f"{d}              {banner_line()}{r}",
         "",
     ]
     return "\n".join(parts) + "\n"
@@ -188,7 +191,7 @@ def render_intro(color: bool | None = None) -> str:
     g, gb, d, r = (GOLD, GOLD_BRIGHT, DIM, RESET) if color else ("", "", "", "")
     cave = _paint_block(CAVE, g, r)
     sword = _paint_block(SWORD, gb, r)
-    return f"\n{cave}\n\n{sword}\n{d}              FndZlda  ·  US Zelda 40th hunter{r}\n\n"
+    return f"\n{cave}\n\n{sword}\n{d}              FndZlda  ·  US Zelda 40th hunter{r}\n{d}              {banner_line()}{r}\n\n"
 
 
 def disappointment(scan_n: int, color: bool | None = None) -> str:
