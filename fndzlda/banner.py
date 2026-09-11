@@ -1,30 +1,16 @@
-"""Ocarina of Time title art for the terminal.
-
-Hylian Shield splash — letters and symbols only.
-"""
+"""Ocarina of Time title art for the terminal."""
 from __future__ import annotations
 
-import base64
 import os
-import ssl
 import sys
-import urllib.request
-import zlib
-from pathlib import Path
 
 GOLD = "\033[38;5;220m"
 GOLD2 = "\033[38;5;178m"
 GOLD_BRIGHT = "\033[1;38;5;227m"
 CYAN = "\033[1;38;5;87m"
 RED = "\033[38;5;174m"
-RED_BRIGHT = "\033[1;38;5;196m"
 DIM = "\033[38;5;94m"
 RESET = "\033[0m"
-
-_DIR = Path(__file__).resolve().parent
-_LOGO_Z_URL = (
-    "https://raw.githubusercontent.com/Memberoffoxhound/FndZlda/main/fndzlda/banner_logo_z.txt"
-)
 
 
 def enable_windows_ansi() -> None:
@@ -57,33 +43,39 @@ def _use_color() -> bool:
         return False
 
 
-def _fetch_logo_z(dest: Path) -> None:
-    req = urllib.request.Request(_LOGO_Z_URL, headers={"User-Agent": "FndZlda"})
-    ctx = ssl.create_default_context()
-    with urllib.request.urlopen(req, timeout=12, context=ctx) as resp:
-        dest.write_bytes(resp.read())
-
-
-def _load_logo() -> str:
-    raw = _DIR / "banner_art.txt"
-    try:
-        if raw.is_file():
-            text = raw.read_text(encoding="utf-8")
-            if text.lstrip().startswith("@"):
-                return text
-    except OSError:
-        pass
-    zpath = _DIR / "banner_logo_z.txt"
-    try:
-        if not zpath.is_file() or zpath.stat().st_size < 100:
-            _fetch_logo_z(zpath)
-        blob = zpath.read_text(encoding="ascii").encode("ascii")
-        return zlib.decompress(base64.b64decode(blob)).decode("utf-8")
-    except Exception:
-        return ""
-
-
-LOGO = _load_logo()
+LOGO = r"""
+                                               ..@..
+%@#......                                     ..@@@....                                 ...  ....+@@
+.@@@@@@#...                                  ..@@@@@=..                                 ....=@@@@@@+
+.@@@@@@@@@@@#...     ..         ..         ..:@@@@@@@*..                             ..:@@@@@@@@@@@.
+..@@@@@@@@@@@@@@@*.........     ...@*.     .:@@@@@@@@@%...    ..@+...          ...-@@@@@@@@@@@@@@@:.
+ .%@@@@@@@@@@@@@@@@@@@+....    ..@@...    .*@@@@@@@@@@@@..    ...@@#..    ...:@@@@@@@@@@@@@@@@@@@@..
+ ..@@@@@@@@@@@@@@@@@@@@@@@@=...@@@.      .@@*...     ..@@....   ..@@@...:@@@@@@@@@@@@@@@@@@@@@@@@-.
+ ...:*@@@@@@@@@@@@@@@@@@@@@@@@@@@#.   ...@@@@@..    ..@@@@+...  ...@@@@@@@@@@@@@@@@@@@@@@@@@@@%-...
+  .      ......=%@@@@@@@@@@@@@@@@#.   ..@@@@@@@...  .@@@@@@@..    .@@@@@@@@@@@@@@@@@+:......
+                  .......:*@@@@@@%.   .@@@@@@@@@....@@@@@@@@@..  ..@@@@@@%=.......
+                    ...  .....@@@@. ..@@@@@@@@@@@+.@@@@@@@@@@@% ..#@@@%.... .......
+      .............+@@@@@@@@@@@@@@:..++++++#@@@@@@@@@@@@@@@@@++:..@@@@@@@@@@@@@@%=....... ......
+      =@@@@@@@@@@@@@@@@@@@@@@@@@@@@...                          .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@.
+     ..%@@@@@@@@@@@@@@@@@@@@@@@@@@@@...         ....        ....@@@@@@@@@@@@@@@@@@@@@@@@@@@@@..
+       .@@@@@@@@@@@@@@@@@@=...-@@@@@@@....     ...@.        ..@@@@@@@@....%@@@@@@@@@@@@@@@@@....
+       ..@@@@@@@@@@@@=.......@@@@@@@@@@@@*..   ..@@@......:@@@@@@@@@@@@=.......@@@@@@@@@@@@:.
+        ..@@@@@@+.... ....=@@@@@@@@@@@@@@@@#. ..@@@@*....@@@@@@@@@@@@@@@@@...  ....-@@@@@@*..
+        ..-*.....   ....@@@@@@@@@.@@@@@@@@@@. .@@@@@@:..+@@@@@@@@@.@@@@@@@@@:..    .....-%.
+                   ...@@@@@@@@@...@@@@@@@@@...%@@@@@@@...%@@@@@@@@*..@@@@@@@@@#. ...
+                 ..@@@@@@@@@@#...@@@@@@......+@@@@@@@@@......@@@@@@....@@@@@@@@@@.....
+              ...@@@@@@@@@@@.. .*@@@@@@   ..#@@@@@@@@@@@.....-@@@@@@....+@@@@@@@@@@=.. ..
+               ...%@@@@@@@..  ..@@@@@@.   .@@@@@@@@@@@@@@#....@@@@@@*.....@@@@@@@@.....
+                 ....@@@=..  ..@@@@@@@......:@@@@@@@@@@.......+@@@@@@... ...@@@:....
+                   ........  .#@@@@@@-...@@:....@@@@@....+@+...@@@@@@@..    .... ...
+                             ..-#@@@@...@@@@=...@@@@@...@@@@#..#@@@@=:..
+                                  .....@@@@.. .-@@@@@....@@@@*.......
+                                   ...@@@@... .@@@@@@@....@@@@#......
+                          ..       ..@@@@.... .:@@@@@.. ...+@@@%...       .
+                         ..%@@@@@@@@@@@@@@@..   +@@@...  .@@@@@@@@@@@@@@@..
+                         ....*@@@.... .@@-...   .%@.... ...@@+......@@@...
+                            ...%@=.........    .....       .. .  ..@@....
+"""
 
 
 def _paint_block(block: str, color: str, reset: str) -> str:
@@ -99,17 +91,14 @@ def render(color: bool | None = None, unicode: bool | None = None) -> str:
     g, g2, gb, d, r = (
         (GOLD, GOLD2, GOLD_BRIGHT, DIM, RESET) if color else ("", "", "", "", "")
     )
-    parts = [""]
-    if LOGO.strip():
-        parts.append(_paint_block(LOGO, g, r))
-    parts.extend(
-        [
-            f"{gb}                 O C A R I N A   O F   T I M E{r}",
-            f"{d}        ---------------------------------------------{r}",
-            f"{g2}              FndZlda{r}{d}  ·  Switch 2 Zelda 40th hunter{r}",
-            "",
-        ]
-    )
+    parts = [
+        "",
+        _paint_block(LOGO, g, r),
+        f"{gb}                 O C A R I N A   O F   T I M E{r}",
+        f"{d}        ---------------------------------------------{r}",
+        f"{g2}              FndZlda{r}{d}  ·  Switch 2 Zelda 40th hunter{r}",
+        "",
+    ]
     return "\n".join(parts) + "\n"
 
 
