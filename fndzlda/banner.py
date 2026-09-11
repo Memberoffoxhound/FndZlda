@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import base64
 import os
+import ssl
 import sys
+import urllib.request
 import zlib
 from pathlib import Path
 
@@ -20,6 +22,9 @@ DIM = "\033[38;5;94m"
 RESET = "\033[0m"
 
 _DIR = Path(__file__).resolve().parent
+_LOGO_Z_URL = (
+    "https://raw.githubusercontent.com/Memberoffoxhound/FndZlda/main/fndzlda/banner_logo_z.txt"
+)
 
 
 def enable_windows_ansi() -> None:
@@ -52,6 +57,13 @@ def _use_color() -> bool:
         return False
 
 
+def _fetch_logo_z(dest: Path) -> None:
+    req = urllib.request.Request(_LOGO_Z_URL, headers={"User-Agent": "FndZlda"})
+    ctx = ssl.create_default_context()
+    with urllib.request.urlopen(req, timeout=12, context=ctx) as resp:
+        dest.write_bytes(resp.read())
+
+
 def _load_logo() -> str:
     raw = _DIR / "banner_art.txt"
     try:
@@ -63,9 +75,11 @@ def _load_logo() -> str:
         pass
     zpath = _DIR / "banner_logo_z.txt"
     try:
+        if not zpath.is_file() or zpath.stat().st_size < 100:
+            _fetch_logo_z(zpath)
         blob = zpath.read_text(encoding="ascii").encode("ascii")
         return zlib.decompress(base64.b64decode(blob)).decode("utf-8")
-    except (OSError, ValueError, zlib.error):
+    except Exception:
         return ""
 
 
