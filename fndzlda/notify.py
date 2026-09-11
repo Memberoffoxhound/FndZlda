@@ -147,9 +147,48 @@ def _play_path(path: Path) -> bool:
     return _play_unix(path)
 
 
+def _windows_notify_sound() -> bool:
+    """Stock Windows notification sound, in-process. No extra app."""
+    if sys.platform != "win32":
+        return False
+    try:
+        import winsound
+    except Exception:
+        return False
+    media = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Media"
+    wavs = (
+        "Windows Notify System Generic.wav",
+        "Windows Notify.wav",
+        "Windows Background.wav",
+        "Windows Notify Messaging.wav",
+        "Nudge.wav",
+    )
+    for name in wavs:
+        path = media / name
+        if path.is_file():
+            try:
+                winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_ASYNC)
+                return True
+            except Exception:
+                pass
+    for alias in ("SystemNotification", "SystemAsterisk", "SystemExclamation", "SystemDefault"):
+        try:
+            winsound.PlaySound(alias, winsound.SND_ALIAS | winsound.SND_ASYNC)
+            return True
+        except Exception:
+            pass
+    try:
+        winsound.MessageBeep(winsound.MB_ICONASTERISK)
+        return True
+    except Exception:
+        return False
+
+
 def play_chime() -> None:
     def _run() -> None:
         if not _in_console():
+            return
+        if _windows_notify_sound():
             return
         path = ensure_sound(CHIME_NAME)
         if path is not None and _play_path(path):
@@ -159,14 +198,6 @@ def play_chime() -> None:
             sys.stdout.flush()
         except Exception:
             pass
-        if sys.platform == "win32":
-            try:
-                import winsound
-
-                winsound.Beep(880, 180)
-                winsound.Beep(1175, 220)
-            except Exception:
-                pass
 
     threading.Thread(target=_run, daemon=True).start()
 
