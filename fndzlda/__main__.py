@@ -78,6 +78,104 @@ def snap_interval(seconds: float) -> float:
     return float(min(300, max(5, n)))
 
 
+
+def _ask_want(preset: str | None) -> set[str]:
+    if preset in ("console", "1"):
+        return {CONSOLE}
+    if preset in ("controller", "pro", "2"):
+        return {CONTROLLER}
+    if preset in ("both", "3"):
+        return {CONSOLE, CONTROLLER}
+    if preset:
+        print(f"unknown --want {preset!r}; use console, controller, or both", file=sys.stderr)
+        sys.exit(2)
+    while True:
+        try:
+            raw = input(PROMPT).strip().lower()
+        except EOFError:
+            print("\nneed a choice (1/2/3)", file=sys.stderr)
+            sys.exit(2)
+        if raw in ("1", "console", "c"):
+            return {CONSOLE}
+        if raw in ("2", "controller", "pro", "p"):
+            return {CONTROLLER}
+        if raw in ("3", "both", "b"):
+            return {CONSOLE, CONTROLLER}
+        print("  type 1, 2, or 3")
+
+
+def _ask_shops(preset: str | None) -> set[str]:
+    if preset:
+        shops, unknown = parse_shops(preset)
+        if unknown or not shops:
+            print(
+                f"unknown --shops {preset!r}; use nintendo, bestbuy, target, walmart, gamestop, amazon, or all",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        return shops
+    while True:
+        try:
+            raw = input(SHOP_PROMPT).strip()
+        except EOFError:
+            print("\nneed a store list (or all)", file=sys.stderr)
+            sys.exit(2)
+        shops, unknown = parse_shops(raw)
+        if unknown:
+            print("  I didn't get: " + ", ".join(unknown))
+            print("  try: nintendo, best buy, target, walmart, gamestop, amazon  (or all)")
+            continue
+        if not shops:
+            print("  type store names, separated by commas. or type all")
+            continue
+        return shops
+
+
+def _ask_interval(preset: float | None) -> float:
+    if preset is not None:
+        return snap_interval(preset)
+    while True:
+        try:
+            raw = input(INTERVAL_PROMPT).strip().lower()
+        except EOFError:
+            return DEFAULT_INTERVAL
+        if not raw or raw in ("d", "default", "enter"):
+            return DEFAULT_INTERVAL
+        try:
+            val = float(raw.replace("s", "").replace("sec", "").replace("onds", ""))
+        except ValueError:
+            print("  type a number like 5, 10, 15, or 20")
+            continue
+        if val <= 0:
+            print("  need a number of seconds, 5 or more")
+            continue
+        snapped = snap_interval(val)
+        if snapped != val:
+            print(f"  using {snapped:.0f}s (5 second steps)")
+        return snapped
+
+
+def _ask_tries(preset: int | None) -> int:
+    if preset is not None:
+        return max(1, min(40, int(preset)))
+    while True:
+        try:
+            raw = input(TRIES_PROMPT).strip().lower()
+        except EOFError:
+            return DEFAULT_TRIES
+        if not raw or raw in ("d", "default"):
+            return DEFAULT_TRIES
+        try:
+            val = int(float(raw))
+        except ValueError:
+            print("  type a whole number like 8")
+            continue
+        if val < 1:
+            print("  need at least 1")
+            continue
+        return max(1, min(40, val))
+
+
 def _save_fired(keys: set[str]) -> None:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     STATE_PATH.write_text(json.dumps({"fired": sorted(keys)}, indent=2), encoding="utf-8")
