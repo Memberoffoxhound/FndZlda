@@ -83,15 +83,17 @@ What is your hero's name?
 > """
 
 TIP_PROMPT = """
-Leave Bruce a tip for building this mess?
+Leave Bruce a tip in rupees for building this mess?
 
-  [Y] yes, Bruce deserves rupees
+  [Y] yes, fill his wallet
   [N] no, Bruce can eat rocks
 
 > """
 
 TIP_AMT_PROMPT = """
-How much? Dollars or rupees. Bruce is not picky.
+How many rupees?
+
+  1  green   5  blue   20  red   50  purple   200  gold   3000  silver
 
 > """
 
@@ -126,6 +128,20 @@ def snap_interval(seconds: float) -> float:
 
 def _norm_answer(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
+
+
+def _rupee_color(n: int) -> str:
+    if n >= 3000:
+        return "silver"
+    if n >= 200:
+        return "gold"
+    if n >= 50:
+        return "purple"
+    if n >= 20:
+        return "red"
+    if n >= 5:
+        return "blue"
+    return "green"
 
 
 def _ask_want(preset: str | None) -> set[str]:
@@ -243,21 +259,29 @@ def _ask_tip() -> str:
         except EOFError:
             return "none"
         if raw in ("n", "no", "nope", "nah", "0"):
-            print("  Bruce sighed into a Lon Lon Milk and charged it to your tab anyway.")
+            print("  Bruce found one green rupee in a pot and muttered your name.")
             return "none"
         if raw in ("y", "yes", "yeah", "yep", "sure", "ok", "tip"):
             break
         print("  Y or N. The owl is waiting.")
     while True:
         try:
-            amt = input(TIP_AMT_PROMPT).strip()
+            amt = input(TIP_AMT_PROMPT).strip().lower()
         except EOFError:
             amt = "5"
-        if not amt:
-            print("  a number, champion. even 1 rupee.")
+        cleaned = amt.replace(",", "").replace("$", "").replace("rupees", "").replace("rupee", "").strip()
+        try:
+            n = int(float(cleaned))
+        except ValueError:
+            print("  a number of rupees. try 20.")
             continue
-        print(f"  noted: {amt} for Bruce. (This app cannot move real money. Honor system. Don't be Ganon.)")
-        return amt
+        if n < 1:
+            print("  at least 1 rupee. don't be that guy.")
+            continue
+        color = _rupee_color(n)
+        label = f"{n} {color} rupee" + ("s" if n != 1 else "")
+        print(f"  clink — {label} for Bruce. (Honor system. The wallet is imaginary.)")
+        return label
 
 
 def _ask_trivia(hero: str) -> bool:
@@ -385,9 +409,9 @@ def main(argv: list[str] | None = None) -> int:
     shop_names = " · ".join(RETAILER_LABEL[s] for s in SHOP_IDS if s in shops)
     print(f"  hero     {hero}")
     if tip != "none":
-        print(f"  tip      {tip} promised to Bruce (honor system)")
+        print(f"  tip      {tip} for Bruce")
     else:
-        print("  tip      Bruce got stiffed")
+        print("  tip      0 rupees. Bruce got stiffed")
     print(f"  hunting  {hunting}")
     print(f"  shops    US only — {shop_names}")
     print(f"  scan every {interval:.0f}s   auto-add cooldown {args.hit_wait:.0f}s per store")
