@@ -32,6 +32,7 @@ from fndzlda.update import check_and_apply
 
 STATE_PATH = Path.home() / ".fndzlda" / "hits.json"
 HIT_PAUSE = 120.0
+DEFAULT_INTERVAL = 20.0
 
 PROMPT = """
 Hunt which US Zelda 40th Anniversary Switch 2 items?
@@ -54,6 +55,19 @@ Examples:  walmart, target
            all
 
 > """
+
+INTERVAL_PROMPT = """
+How many seconds between scans?
+
+Type a number in 5 second steps:  5  10  15  20  25  30  …
+Press Enter for 20.
+
+> """
+
+
+def snap_interval(seconds: float) -> float:
+    n = int(round(float(seconds) / 5.0) * 5)
+    return float(min(300, max(5, n)))
 
 
 def _ask_want(preset: str | None) -> set[str]:
@@ -108,6 +122,30 @@ def _ask_shops(preset: str | None) -> set[str]:
         return shops
 
 
+def _ask_interval(preset: float | None) -> float:
+    if preset is not None:
+        return snap_interval(preset)
+    while True:
+        try:
+            raw = input(INTERVAL_PROMPT).strip().lower()
+        except EOFError:
+            return DEFAULT_INTERVAL
+        if not raw or raw in ("d", "default", "enter"):
+            return DEFAULT_INTERVAL
+        try:
+            val = float(raw.replace("s", "").replace("sec", "").replace("onds", ""))
+        except ValueError:
+            print("  type a number like 5, 10, 15, or 20")
+            continue
+        if val <= 0:
+            print("  need a number of seconds, 5 or more")
+            continue
+        snapped = snap_interval(val)
+        if snapped != val:
+            print(f"  using {snapped:.0f}s (5 second steps)")
+        return snapped
+
+
 def _save_fired(keys: set[str]) -> None:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     STATE_PATH.write_text(json.dumps({"fired": sorted(keys)}, indent=2), encoding="utf-8")
@@ -152,7 +190,12 @@ def main(argv: list[str] | None = None) -> int:
         "--shops",
         help="comma-separated stores, or all  (skips the store prompt). typos are ok",
     )
-    p.add_argument("--interval", type=float, default=20.0, help="seconds between scans (default 20)")
+    p.add_argument(
+        "--interval",
+        type=float,
+        default=None,
+        help="seconds between scans (5 second steps). skips the interval question",
+    )
     p.add_argument(
         "--hit-wait",
         type=float,
@@ -185,11 +228,12 @@ def main(argv: list[str] | None = None) -> int:
 
     want = _ask_want(args.want)
     shops = _ask_shops(args.shops)
+    interval = _ask_interval(args.interval)
     hunting = ", ".join(ITEM_LABEL[i] for i in (CONSOLE, CONTROLLER) if i in want)
     shop_names = " · ".join(RETAILER_LABEL[s] for s in SHOP_IDS if s in shops)
     print(f"  hunting  {hunting}")
     print(f"  shops    US only — {shop_names}")
-    print(f"  scan every {args.interval:.0f}s   auto-add cooldown {args.hit_wait:.0f}s per store")
+    print(f"  scan every {interval:.0f}s   auto-add cooldown {args.hit_wait:.0f}s per store")
     print("  Ctrl+C to quit. Hits notify every time. Auto-add cools only that store.")
     print("  Best Buy opens the Pre-Order / add-to-cart button (queue or cart).\n")
 
@@ -256,7 +300,7 @@ def main(argv: list[str] | None = None) -> int:
                 mark_shop_cooldown(retailer, shop_until, args.hit_wait, now=now)
             if args.once:
                 return 0
-            wait = next_wait(len(hits), args.interval, args.hit_wait)
+            wait = next_wait(len(hits), interval, args.hit_wait)
             print(f"  next scan in {wait:.0f}s\n")
             time.sleep(wait)
     except KeyboardInterrupt:
