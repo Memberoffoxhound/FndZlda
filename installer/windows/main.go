@@ -40,18 +40,29 @@ func main() {
 	fmt.Println("  It's dangerous to go alone! Setting up...")
 	fmt.Println()
 
-	if err := extractApp(appDir); err != nil {
+	n, err := extractApp(appDir)
+	if err != nil {
 		fail("could not unpack the hunter: %v", err)
 	}
-	py, err := ensurePython(pyDir)
+	if n < 3 {
+		fail("hunter package missing after unpack (%d files in %s)", n, filepath.Join(appDir, "fndzlda"))
+	}
+	fmt.Printf("  unpacked %d hunter files\n", n)
+
+	py, err := ensurePython(pyDir, appDir)
 	if err != nil {
 		fail("could not install Python: %v\n  Download Python yourself from https://www.python.org/downloads/windows/\n  Check 'Add python.exe to PATH', then run FndZlda.exe again.", err)
+	}
+
+	runner, err := writeRunner(appDir)
+	if err != nil {
+		fail("could not write launcher script: %v", err)
 	}
 
 	fmt.Println("  TAKE THIS!  launching the hunt...")
 	fmt.Println()
 
-	cmd := exec.Command(py, "-m", "fndzlda")
+	cmd := exec.Command(py, runner)
 	cmd.Dir = appDir
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -81,12 +92,13 @@ func main() {
 	}
 }
 
-func extractApp(appDir string) error {
+func extractApp(appDir string) (int, error) {
 	pkg := filepath.Join(appDir, "fndzlda")
 	if err := os.MkdirAll(pkg, 0o755); err != nil {
-		return err
+		return 0, err
 	}
-	return fs.WalkDir(payload, "payload/fndzlda", func(path string, d fs.DirEntry, err error) error {
+	written := 0
+	err := fs.WalkDir(payload, "payload/fndzlda", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -98,14 +110,34 @@ func extractApp(appDir string) error {
 			return err
 		}
 		name := filepath.Base(path)
-		return os.WriteFile(filepath.Join(pkg, name), b, 0o644)
+		if err := os.WriteFile(filepath.Join(pkg, name), b, 0o644); err != nil {
+			return err
+		}
+		written++
+		return nil
 	})
+	if err != nil {
+		return written, err
+	}
+	need := []string{"__init__.py", "__main__.py"}
+	for _, n := range need {
+		if _, err := os.Stat(filepath.Join(pkg, n)); err != nil {
+			return written, fmt.Errorf("missing %s after unpack", n)
+		}
+	}
+	return written, nil
 }
 
-func ensurePython(pyDir string) (string, error) {
+func writeRunner(appDir string) (string, error) {
+	p := filepath.Join(appDir, "run_hunter.py")
+	body := "import sys\nfrom pathlib import Path\nroot = Path(__file__).resolve().parent\nsys.path.insert(0, str(root))\nfrom fndzlda.__main__ import main\nraise SystemExit(main())\n"
+	return p, os.WriteFile(p, []byte(body), 0o644)
+}
+
+func ensurePython(pyDir, appDir string) (string, error) {
 	exe := filepath.Join(pyDir, "python.exe")
 	if pythonWorks(exe) {
-		_ = enableSite(pyDir)
+		_ = enableSite(pyDir, appDir)
 		fmt.Println("  Python already on disk.")
 		return exe, nil
 	}
@@ -138,11 +170,12 @@ func ensurePython(pyDir string) (string, error) {
 	_ = os.Remove(zipPath)
 	if last != nil {
 		if wp := tryWinget(); wp != "" {
+			_ = enableSite(pyDir, appDir)
 			return wp, nil
 		}
 		return "", last
 	}
-	if err := enableSite(pyDir); err != nil {
+	if err := enableSite(pyDir, appDir); err != nil {
 		return "", err
 	}
 	if !pythonWorks(exe) {
@@ -267,28 +300,35 @@ func unzip(src, dest string) error {
 	return nil
 }
 
-func enableSite(pyDir string) error {
+func enableSite(pyDir, appDir string) error {
 	_ = os.MkdirAll(filepath.Join(pyDir, "Lib", "site-packages"), 0o755)
+	zipName := "python312.zip"
 	matches, _ := filepath.Glob(filepath.Join(pyDir, "python*._pth"))
-	body := "python312.zip\n.\nLib\nLib\\site-packages\nimport site\n"
 	for _, p := range matches {
 		name := strings.ToLower(filepath.Base(p))
 		switch {
 		case strings.Contains(name, "311"):
-			body = "python311.zip\n.\nLib\nLib\\site-packages\nimport site\n"
+			zipName = "python311.zip"
 		case strings.Contains(name, "313"):
-			body = "python313.zip\n.\nLib\nLib\\site-packages\nimport site\n"
+			zipName = "python313.zip"
 		case strings.Contains(name, "314"):
-			body = "python314.zip\n.\nLib\nLib\\site-packages\nimport site\n"
+			zipName = "python314.zip"
 		default:
-			body = "python312.zip\n.\nLib\nLib\\site-packages\nimport site\n"
+			zipName = "python312.zip"
 		}
+	}
+	// Embeddable CPython only honors paths listed here. '.' is the folder
+	// that contains python.exe, NOT the hunter app folder. Put appDir on
+	// sys.path explicitly. Forward slashes are fine on Windows.
+	app := filepath.ToSlash(appDir)
+	body := zipName + "\n.\nLib\nLib\\site-packages\n" + app + "\nimport site\n"
+	if len(matches) == 0 {
+		return os.WriteFile(filepath.Join(pyDir, "python312._pth"), []byte(body), 0o644)
+	}
+	for _, p := range matches {
 		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 			return err
 		}
-	}
-	if len(matches) == 0 {
-		return os.WriteFile(filepath.Join(pyDir, "python312._pth"), []byte(body), 0o644)
 	}
 	return nil
 }
