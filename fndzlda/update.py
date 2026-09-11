@@ -28,12 +28,12 @@ TIMEOUT = 12.0
 
 PACKAGE = Path(__file__).resolve().parent
 COMMIT_FILE = PACKAGE / ".commit"
-_KEEP_SUFFIX = (".py", ".txt", ".wav", ".mp3")
+_KEEP_SUFFIX = (".py", ".txt", ".wav", ".mp3", ".b64")
 
 
 @dataclass
 class UpdateResult:
-    action: str  # skip, current, updated, failed
+    action: str
     local: str = ""
     remote: str = ""
     detail: str = ""
@@ -120,8 +120,13 @@ def write_commit(package: Path, sha: str) -> None:
         pass
 
 
+def _keep_name(name: str) -> bool:
+    if name.endswith(_KEEP_SUFFIX):
+        return True
+    return ".b64." in name
+
+
 def apply_zipball(package: Path, blob: bytes) -> int:
-    """Replace package files from a GitHub commit zip. Returns files written."""
     written = 0
     with zipfile.ZipFile(io.BytesIO(blob)) as zf:
         for info in zf.infolist():
@@ -138,7 +143,7 @@ def apply_zipball(package: Path, blob: bytes) -> int:
             if len(rest) != 1 or rest[0] in (".", ".."):
                 continue
             name = rest[0]
-            if not name.endswith(_KEEP_SUFFIX):
+            if not _keep_name(name):
                 continue
             dest = package / name
             dest.write_bytes(zf.read(info.filename))
@@ -162,6 +167,17 @@ def _reexec(argv: list[str] | None) -> None:
     os.execv(sys.executable, args)
 
 
+def _install_sounds(package: Path, quiet: bool) -> None:
+    try:
+        from fndzlda.sounds import ensure_sounds
+
+        got = ensure_sounds(package)
+    except Exception:
+        return
+    if got and not quiet:
+        print("  audio    " + ", ".join(got))
+
+
 def check_and_apply(
     *,
     no_update: bool = False,
@@ -173,9 +189,10 @@ def check_and_apply(
     reexec=None,
     quiet: bool = False,
 ) -> UpdateResult:
-    if no_update or os.environ.get("FNDZLDA_NO_UPDATE"):
-        return UpdateResult("skip", detail="disabled")
     pkg = package or PACKAGE
+    if no_update or os.environ.get("FNDZLDA_NO_UPDATE"):
+        _install_sounds(pkg, quiet)
+        return UpdateResult("skip", detail="disabled")
     get = http_get or _http_get
     try:
         raw = get(API_URL)
@@ -187,16 +204,19 @@ def check_and_apply(
     except (OSError, urllib.error.URLError, TimeoutError, ValueError) as e:
         result = UpdateResult("failed", detail=str(e) or "network")
         _say(result, quiet)
+        _install_sounds(pkg, quiet)
         return result
     if not remote:
         result = UpdateResult("failed", detail="bad GitHub response")
         _say(result, quiet)
+        _install_sounds(pkg, quiet)
         return result
     root = repo_root(pkg)
     local = local_sha(pkg, root)
     if same_commit(local, remote):
         result = UpdateResult("current", local=local, remote=remote)
         _say(result, quiet)
+        _install_sounds(pkg, quiet)
         return result
 
     try:
@@ -211,6 +231,7 @@ def check_and_apply(
                     )
                     if not quiet:
                         print("  local git is ahead or diverged — not pulling")
+                    _install_sounds(pkg, quiet)
                     return result
                 raise RuntimeError(err)
         elif root is not None and git_pull is not None:
@@ -226,10 +247,12 @@ def check_and_apply(
     except Exception as e:
         result = UpdateResult("failed", local=local, remote=remote, detail=str(e))
         _say(result, quiet)
+        _install_sounds(pkg, quiet)
         return result
 
     result = UpdateResult("updated", local=local, remote=remote)
     _say(result, quiet)
+    _install_sounds(pkg, quiet)
     if restart:
         (reexec or _reexec)(argv)
     return result
