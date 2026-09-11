@@ -4,8 +4,10 @@ Hylian Shield splash — letters and symbols only.
 """
 from __future__ import annotations
 
+import base64
 import os
 import sys
+import zlib
 from pathlib import Path
 
 GOLD = "\033[38;5;220m"
@@ -17,7 +19,7 @@ RED_BRIGHT = "\033[1;38;5;196m"
 DIM = "\033[38;5;94m"
 RESET = "\033[0m"
 
-_ART_PATH = Path(__file__).with_name("banner_art.txt")
+_DIR = Path(__file__).resolve().parent
 
 
 def enable_windows_ansi() -> None:
@@ -51,10 +53,14 @@ def _use_color() -> bool:
 
 
 def _load_logo() -> str:
-    try:
-        return _ART_PATH.read_text(encoding="utf-8")
-    except OSError:
-        return "FndZlda\n"
+    raw = _DIR / "banner_art.txt"
+    if raw.is_file():
+        text = raw.read_text(encoding="utf-8")
+        if text.lstrip().startswith("@"):
+            return text
+    zpath = _DIR / "banner_logo_z.txt"
+    blob = zpath.read_text(encoding="ascii").encode("ascii")
+    return zlib.decompress(base64.b64decode(blob)).decode("utf-8")
 
 
 LOGO = _load_logo()
@@ -85,7 +91,6 @@ def render(color: bool | None = None, unicode: bool | None = None) -> str:
 
 
 def render_ocarina(color: bool | None = None) -> str:
-    """Subtitle painted in the title-screen gold (kept for callers/tests)."""
     if color is None:
         color = _use_color()
     gb, r = (GOLD_BRIGHT, RESET) if color else ("", "")
