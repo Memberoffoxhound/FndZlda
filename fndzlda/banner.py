@@ -152,13 +152,6 @@ SWORD = r"""
                MASTER SWORD
 """
 
-NAVI = r"""
-           *  .  *
-          (  o o  )      HEY! LISTEN!!!
-           \\  -  /
-            *   *
-"""
-
 MISS_QUOTES = (
     ("You've met with a terrible fate, haven't you?", "Majora's Mask"),
     ("Sorry, I can't give credit. Come back when you're a little... mmm... richer!", "Hyrule shopkeeper"),
@@ -171,6 +164,22 @@ MISS_QUOTES = (
     ("Nothing happened.", "using an item in the wrong place"),
     ("The Master Sword sleeps still.", "the Pedestal of Time"),
 )
+
+
+def shout_listen(hero: str = "LINK") -> str:
+    name = (hero or "LINK").strip().upper() or "LINK"
+    return f"HEY, {name}! LISTEN!!!!"
+
+
+def navi_art(hero: str = "LINK") -> str:
+    shout = shout_listen(hero)
+    return (
+        "\n"
+        "           *  .  *\n"
+        f"          (  o o  )      {shout}\n"
+        "           \\  -  /\n"
+        "            *   *\n"
+    )
 
 
 def render_intro(color: bool | None = None) -> str:
@@ -190,11 +199,11 @@ def disappointment(scan_n: int, color: bool | None = None) -> str:
     return f'  {c}"{q}"{rst}\n  {d}    — {src}{rst}'
 
 
-def hey_listen(color: bool | None = None) -> str:
+def hey_listen(hero: str = "LINK", color: bool | None = None) -> str:
     if color is None:
         color = _use_color()
     c, rst = (CYAN, RESET) if color else ("", "")
-    return _paint_block(NAVI, c, rst) + "\n"
+    return _paint_block(navi_art(hero), c, rst) + "\n"
 
 
 def print_logo() -> None:
