@@ -80,70 +80,68 @@ def ensure_sound(name: str) -> Path | None:
     return None
 
 
+def _in_console() -> bool:
+    """Only play audio when this process owns a real terminal."""
+    try:
+        if sys.stdin.isatty() or sys.stdout.isatty() or sys.stderr.isatty():
+            return True
+    except Exception:
+        pass
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            return bool(ctypes.windll.kernel32.GetConsoleWindow())
+        except Exception:
+            return False
+    return False
+
+
 def _play_win(path: Path) -> bool:
+    """Play inside this process. No PowerShell, no wmplayer, no extra window."""
     full = str(path.resolve())
-    if path.suffix.lower() == ".wav":
+    suffix = path.suffix.lower()
+    if suffix == ".wav":
         try:
             import winsound
 
             winsound.PlaySound(full, winsound.SND_FILENAME | winsound.SND_ASYNC)
             return True
         except Exception:
-            pass
-    # wmplayer can do mp3 without a visible window most of the time
-    wm = shutil.which("wmplayer") or r"C:\Program Files\Windows Media Player\wmplayer.exe"
-    if Path(wm).is_file():
-        try:
-            subprocess.Popen(
-                [wm, "/play", "/close", full],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            return True
-        except Exception:
-            pass
-    uri = Path(full).as_uri()
-    ps = (
-        "Add-Type -AssemblyName presentationCore; "
-        "$p = New-Object System.Windows.Media.MediaPlayer; "
-        f"$p.Open([Uri]'{uri}'); $p.Volume = 1; $p.Play(); "
-        "Start-Sleep -Seconds 6"
-    )
+            return False
+    # MP3 via winmm MCI — same process, no helper app.
     try:
-        subprocess.Popen(
-            ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        import ctypes
+
+        winmm = ctypes.windll.winmm
+        alias = "fndzlda_media"
+        winmm.mciSendStringW(f"close {alias}", None, 0, None)
+        err = winmm.mciSendStringW(
+            f'open "{full}" type mpegvideo alias {alias}', None, 0, None
         )
-        return True
+        if err:
+            err = winmm.mciSendStringW(f'open "{full}" alias {alias}', None, 0, None)
+        if err:
+            return False
+        err = winmm.mciSendStringW(f"play {alias}", None, 0, None)
+        return err == 0
     except Exception:
         return False
 
 
 def _play_unix(path: Path) -> bool:
-    if sys.platform == "darwin":
-        cmd = ["afplay", str(path)]
-    else:
-        cmd = None
-        for bin_name in ("ffplay", "mpv", "mpg123", "paplay", "aplay"):
-            if shutil.which(bin_name):
-                if bin_name == "ffplay":
-                    cmd = [bin_name, "-nodisp", "-autoexit", "-loglevel", "quiet", str(path)]
-                elif bin_name == "mpv":
-                    cmd = [bin_name, "--no-video", "--really-quiet", str(path)]
-                else:
-                    cmd = [bin_name, str(path)]
-                break
-        if cmd is None:
-            return False
+    # Bell only — do not spawn ffplay/mpv/afplay.
     try:
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return True
+        sys.stdout.write("\a")
+        sys.stdout.flush()
     except Exception:
-        return False
+        pass
+    return False
 
 
 def _play_path(path: Path) -> bool:
+    if not _in_console():
+        return False
     if sys.platform == "win32":
         return _play_win(path)
     return _play_unix(path)
@@ -151,6 +149,8 @@ def _play_path(path: Path) -> bool:
 
 def play_chime() -> None:
     def _run() -> None:
+        if not _in_console():
+            return
         path = ensure_sound(CHIME_NAME)
         if path is not None and _play_path(path):
             return
@@ -172,7 +172,9 @@ def play_chime() -> None:
 
 
 def play_hunt_theme() -> None:
-    """Song of Storms when the hunt actually starts."""
+    """Song of Storms when the hunt actually starts. Console process only."""
+    if not _in_console():
+        return
     path = None
     for name in STORM_NAMES:
         path = ensure_sound(name)
