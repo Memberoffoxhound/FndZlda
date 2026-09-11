@@ -342,7 +342,7 @@ func enableSite(pyDir, appDir string) error {
 		return os.WriteFile(filepath.Join(pyDir, "python312._pth"), []byte(body), 0o644)
 	}
 	for _, p := range matches {
-		if err := os.WriteFile(p, []byte(body), err != nil {
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 			return err
 		}
 	}
