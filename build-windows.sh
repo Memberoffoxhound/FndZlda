@@ -9,6 +9,7 @@ PAY="$ROOT/installer/windows/payload/fndzlda"
 rm -rf "$PAY"
 mkdir -p "$PAY"
 cp "$ROOT"/fndzlda/*.py "$PAY/"
+cp "$ROOT"/fndzlda/*.txt "$PAY/" 2>/dev/null || true
 
 mkdir -p "$ROOT/dist"
 cd "$ROOT/installer/windows"
