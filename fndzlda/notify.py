@@ -1,4 +1,4 @@
-"""Beep / desktop ping / Navi chime on a hit. Never required for the hunt to work."""
+"""Beep / desktop ping / Navi chime / hunt theme. Never required for the hunt to work."""
 from __future__ import annotations
 
 import json
@@ -13,31 +13,30 @@ from pathlib import Path
 
 _DIR = Path(__file__).resolve().parent
 CHIME_NAME = "listen.wav"
-CHIME_URL = (
-    "https://raw.githubusercontent.com/Memberoffoxhound/FndZlda/main/fndzlda/listen.wav"
-)
+STORM_NAME = "storms.mp3"
+RAW = "https://raw.githubusercontent.com/Memberoffoxhound/FndZlda/main/fndzlda/"
 
 
-def _chime_path() -> Path:
-    env = (os.environ.get("FNDZLDA_CHIME") or "").strip()
-    if env:
-        return Path(env)
+def _localapp(name: str) -> Path | None:
     local = os.environ.get("LOCALAPPDATA")
-    if local:
-        extra = Path(local) / "FndZlda" / CHIME_NAME
-        if extra.is_file() and extra.stat().st_size > 100:
-            return extra
-    return _DIR / CHIME_NAME
+    if not local:
+        return None
+    extra = Path(local) / "FndZlda" / name
+    if extra.is_file() and extra.stat().st_size > 100:
+        return extra
+    return None
 
 
-def _download_chime(dest: Path) -> bool:
+def _download(url: str, dest: Path, magic: bytes | None = None) -> bool:
     try:
         dest.parent.mkdir(parents=True, exist_ok=True)
-        req = urllib.request.Request(CHIME_URL, headers={"User-Agent": "FndZlda"})
+        req = urllib.request.Request(url, headers={"User-Agent": "FndZlda"})
         ctx = ssl.create_default_context()
         with urllib.request.urlopen(req, timeout=12, context=ctx) as resp:
             blob = resp.read()
-        if len(blob) < 100 or blob[:4] != b"RIFF":
+        if len(blob) < 100:
+            return False
+        if magic and not blob.startswith(magic):
             return False
         dest.write_bytes(blob)
         return True
@@ -45,54 +44,82 @@ def _download_chime(dest: Path) -> bool:
         return False
 
 
-def ensure_chime() -> Path | None:
-    path = _chime_path()
-    if path.is_file() and path.stat().st_size > 100:
-        return path
-    pkg = _DIR / CHIME_NAME
-    if _download_chime(pkg):
+def ensure_sound(name: str, env_key: str = "") -> Path | None:
+    if env_key:
+        env = (os.environ.get(env_key) or "").strip()
+        if env:
+            p = Path(env)
+            if p.is_file():
+                return p
+    extra = _localapp(name)
+    if extra is not None:
+        return extra
+    pkg = _DIR / name
+    if pkg.is_file() and pkg.stat().st_size > 100:
+        return pkg
+    magic = b"RIFF" if name.endswith(".wav") else None
+    if _download(RAW + name, pkg, magic=magic):
         return pkg
     return None
 
 
+def _play_path(path: Path) -> bool:
+    suffix = path.suffix.lower()
+    if sys.platform == "win32" and suffix == ".wav":
+        try:
+            import winsound
+
+            winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_ASYNC)
+            return True
+        except Exception:
+            pass
+    if sys.platform == "win32":
+        ps = (
+            "Add-Type -AssemblyName presentationCore; "
+            "$p = New-Object System.Windows.Media.MediaPlayer; "
+            f"$p.Open([uri]{(str(path.resolve()))!r}); "
+            "$p.Play(); Start-Sleep -Seconds 6"
+        )
+        try:
+            subprocess.Popen(
+                ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return True
+        except Exception:
+            pass
+    if sys.platform == "darwin":
+        player = ["afplay", str(path)]
+    else:
+        player = None
+        for bin_name in ("ffplay", "paplay", "aplay", "mpg123", "mpv"):
+            if shutil.which(bin_name):
+                if bin_name == "ffplay":
+                    player = [bin_name, "-nodisp", "-autoexit", "-loglevel", "quiet", str(path)]
+                elif bin_name == "mpv":
+                    player = [bin_name, "--no-video", "--really-quiet", str(path)]
+                else:
+                    player = [bin_name, str(path)]
+                break
+    if player:
+        try:
+            subprocess.Popen(
+                player,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return True
+        except Exception:
+            return False
+    return False
+
+
 def play_chime() -> None:
-    """Play listen.wav in the background. Falls back to a short beep."""
-
     def _run() -> None:
-        path = ensure_chime()
-        if path is not None and sys.platform == "win32":
-            try:
-                import winsound
-
-                winsound.PlaySound(
-                    str(path),
-                    winsound.SND_FILENAME | winsound.SND_ASYNC,
-                )
-                return
-            except Exception:
-                pass
-        if path is not None:
-            player = None
-            if sys.platform == "darwin":
-                player = ["afplay", str(path)]
-            else:
-                for bin_name in ("paplay", "aplay", "ffplay"):
-                    if shutil.which(bin_name):
-                        if bin_name == "ffplay":
-                            player = [bin_name, "-nodisp", "-autoexit", "-loglevel", "quiet", str(path)]
-                        else:
-                            player = [bin_name, str(path)]
-                        break
-            if player:
-                try:
-                    subprocess.Popen(
-                        player,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                    )
-                    return
-                except Exception:
-                    pass
+        path = ensure_sound(CHIME_NAME, "FNDZLDA_CHIME")
+        if path is not None and _play_path(path):
+            return
         try:
             sys.stdout.write("\a")
             sys.stdout.flush()
@@ -106,6 +133,17 @@ def play_chime() -> None:
                 winsound.Beep(1175, 220)
             except Exception:
                 pass
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def play_hunt_theme() -> None:
+    """Song of Storms when the hunt actually starts."""
+
+    def _run() -> None:
+        path = ensure_sound(STORM_NAME, "FNDZLDA_THEME")
+        if path is not None:
+            _play_path(path)
 
     threading.Thread(target=_run, daemon=True).start()
 
