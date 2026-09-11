@@ -54,13 +54,19 @@ def _use_color() -> bool:
 
 def _load_logo() -> str:
     raw = _DIR / "banner_art.txt"
-    if raw.is_file():
-        text = raw.read_text(encoding="utf-8")
-        if text.lstrip().startswith("@"):
-            return text
+    try:
+        if raw.is_file():
+            text = raw.read_text(encoding="utf-8")
+            if text.lstrip().startswith("@"):
+                return text
+    except OSError:
+        pass
     zpath = _DIR / "banner_logo_z.txt"
-    blob = zpath.read_text(encoding="ascii").encode("ascii")
-    return zlib.decompress(base64.b64decode(blob)).decode("utf-8")
+    try:
+        blob = zpath.read_text(encoding="ascii").encode("ascii")
+        return zlib.decompress(base64.b64decode(blob)).decode("utf-8")
+    except (OSError, ValueError, zlib.error):
+        return ""
 
 
 LOGO = _load_logo()
@@ -79,14 +85,17 @@ def render(color: bool | None = None, unicode: bool | None = None) -> str:
     g, g2, gb, d, r = (
         (GOLD, GOLD2, GOLD_BRIGHT, DIM, RESET) if color else ("", "", "", "", "")
     )
-    parts = [
-        "",
-        _paint_block(LOGO, g, r),
-        f"{gb}                 O C A R I N A   O F   T I M E{r}",
-        f"{d}        ---------------------------------------------{r}",
-        f"{g2}              FndZlda{r}{d}  ·  Switch 2 Zelda 40th hunter{r}",
-        "",
-    ]
+    parts = [""]
+    if LOGO.strip():
+        parts.append(_paint_block(LOGO, g, r))
+    parts.extend(
+        [
+            f"{gb}                 O C A R I N A   O F   T I M E{r}",
+            f"{d}        ---------------------------------------------{r}",
+            f"{g2}              FndZlda{r}{d}  ·  Switch 2 Zelda 40th hunter{r}",
+            "",
+        ]
+    )
     return "\n".join(parts) + "\n"
 
 
