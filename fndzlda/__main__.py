@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import random
-import re
 import sys
 import time
 from pathlib import Path
@@ -75,241 +73,9 @@ Other stores keep scanning. Press Enter for 8.
 
 > """
 
-NAME_PROMPT = """
-What is your hero's name?
-
-(The Great Deku Tree insists. Link is acceptable. So is something worse.)
-
-> """
-
-TIP_PROMPT = """
-Leave Bruce a tip in rupees for building this mess?
-
-  [Y] yes, fill his wallet
-  [N] no, Bruce can eat rocks
-
-> """
-
-TIP_AMT_PROMPT = """
-How many rupees?
-
-  1  green   5  blue   20  red   50  purple   200  gold   3000  silver
-
-> """
-
-TRIVIA = (
-    (
-        "What is the name of the loyal fairy who yells HEY! LISTEN! in Ocarina of Time?",
-        ("navi",),
-    ),
-    (
-        "In Ocarina of Time, what instrument does young Link play?",
-        ("ocarina", "the ocarina", "ocarina of time", "fairy ocarina"),
-    ),
-    (
-        "What is the name of Link's horse in Ocarina of Time?",
-        ("epona",),
-    ),
-    (
-        "Who is the king of the Gerudo and the final boss of Ocarina of Time?",
-        ("ganondorf", "ganon", "ganondorf dragmire"),
-    ),
-    (
-        "What song opens the Door of Time in the Temple of Time?",
-        ("song of time", "the song of time"),
-    ),
-)
-
-
 def snap_interval(seconds: float) -> float:
     n = int(round(float(seconds) / 5.0) * 5)
     return float(min(300, max(5, n)))
-
-
-def _norm_answer(s: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
-
-
-def _rupee_color(n: int) -> str:
-    if n >= 3000:
-        return "silver"
-    if n >= 200:
-        return "gold"
-    if n >= 50:
-        return "purple"
-    if n >= 20:
-        return "red"
-    if n >= 5:
-        return "blue"
-    return "green"
-
-
-def _ask_want(preset: str | None) -> set[str]:
-    if preset in ("console", "1"):
-        return {CONSOLE}
-    if preset in ("controller", "pro", "2"):
-        return {CONTROLLER}
-    if preset in ("both", "3"):
-        return {CONSOLE, CONTROLLER}
-    if preset:
-        print(f"unknown --want {preset!r}; use console, controller, or both", file=sys.stderr)
-        sys.exit(2)
-    while True:
-        try:
-            raw = input(PROMPT).strip().lower()
-        except EOFError:
-            print("\nneed a choice (1/2/3)", file=sys.stderr)
-            sys.exit(2)
-        if raw in ("1", "console", "c"):
-            return {CONSOLE}
-        if raw in ("2", "controller", "pro", "p"):
-            return {CONTROLLER}
-        if raw in ("3", "both", "b"):
-            return {CONSOLE, CONTROLLER}
-        print("  type 1, 2, or 3")
-
-
-def _ask_shops(preset: str | None) -> set[str]:
-    if preset:
-        shops, unknown = parse_shops(preset)
-        if unknown or not shops:
-            print(
-                f"unknown --shops {preset!r}; use nintendo, bestbuy, target, walmart, gamestop, amazon, or all",
-                file=sys.stderr,
-            )
-            sys.exit(2)
-        return shops
-    while True:
-        try:
-            raw = input(SHOP_PROMPT).strip()
-        except EOFError:
-            print("\nneed a store list (or all)", file=sys.stderr)
-            sys.exit(2)
-        shops, unknown = parse_shops(raw)
-        if unknown:
-            print("  I didn't get: " + ", ".join(unknown))
-            print("  try: nintendo, best buy, target, walmart, gamestop, amazon  (or all)")
-            continue
-        if not shops:
-            print("  type store names, separated by commas. or type all")
-            continue
-        return shops
-
-
-def _ask_interval(preset: float | None) -> float:
-    if preset is not None:
-        return snap_interval(preset)
-    while True:
-        try:
-            raw = input(INTERVAL_PROMPT).strip().lower()
-        except EOFError:
-            return DEFAULT_INTERVAL
-        if not raw or raw in ("d", "default", "enter"):
-            return DEFAULT_INTERVAL
-        try:
-            val = float(raw.replace("s", "").replace("sec", "").replace("onds", ""))
-        except ValueError:
-            print("  type a number like 5, 10, 15, or 20")
-            continue
-        if val <= 0:
-            print("  need a number of seconds, 5 or more")
-            continue
-        snapped = snap_interval(val)
-        if snapped != val:
-            print(f"  using {snapped:.0f}s (5 second steps)")
-        return snapped
-
-
-def _ask_tries(preset: int | None) -> int:
-    if preset is not None:
-        return max(1, min(40, int(preset)))
-    while True:
-        try:
-            raw = input(TRIES_PROMPT).strip().lower()
-        except EOFError:
-            return DEFAULT_TRIES
-        if not raw or raw in ("d", "default"):
-            return DEFAULT_TRIES
-        try:
-            val = int(float(raw))
-        except ValueError:
-            print("  type a whole number like 8")
-            continue
-        if val < 1:
-            print("  need at least 1")
-            continue
-        return max(1, min(40, val))
-
-
-def _ask_name() -> str:
-    while True:
-        try:
-            raw = input(NAME_PROMPT).strip()
-        except EOFError:
-            return "Link"
-        if raw:
-            return raw[:40]
-        print("  a nameless hero cannot pull the Master Sword. type something.")
-
-
-def _ask_tip() -> str:
-    while True:
-        try:
-            raw = input(TIP_PROMPT).strip().lower()
-        except EOFError:
-            return "none"
-        if raw in ("n", "no", "nope", "nah", "0"):
-            print("  Bruce found one green rupee in a pot and muttered your name.")
-            return "none"
-        if raw in ("y", "yes", "yeah", "yep", "sure", "ok", "tip"):
-            break
-        print("  Y or N. The owl is waiting.")
-    while True:
-        try:
-            amt = input(TIP_AMT_PROMPT).strip().lower()
-        except EOFError:
-            amt = "5"
-        cleaned = amt.replace(",", "").replace("$", "").replace("rupees", "").replace("rupee", "").strip()
-        try:
-            n = int(float(cleaned))
-        except ValueError:
-            print("  a number of rupees. try 20.")
-            continue
-        if n < 1:
-            print("  at least 1 rupee. don't be that guy.")
-            continue
-        color = _rupee_color(n)
-        label = f"{n} {color} rupee" + ("s" if n != 1 else "")
-        print(f"  clink — {label} for Bruce. (Honor system. The wallet is imaginary.)")
-        return label
-
-
-def _ask_trivia(hero: str) -> bool:
-    q, answers = random.choice(TRIVIA)
-    print()
-    print("  Temple of Wisdom")
-    print(f"  {q}")
-    print()
-    while True:
-        try:
-            raw = input("> ").strip()
-        except EOFError:
-            raw = ""
-        if raw:
-            break
-        print("  Kaepora Gaebora will not let you skip. Answer.")
-    got = _norm_answer(raw)
-    ok = any(_norm_answer(a) == got or _norm_answer(a) in got or got in _norm_answer(a) for a in answers)
-    if ok:
-        print()
-        print(f"  !!!  {hero}! You received a Piece of Heart!  !!!")
-        print("  Navi does a little loop-de-loop. The hunt may begin.")
-        return True
-    print()
-    print(f"  Wrong. The answer was {answers[0]}.")
-    print(f"  {hero} just bonked a pot and a single rupee fell out. Pathetic.")
-    print("  It's dangerous to go alone — but we are starting anyway.")
-    return False
 
 
 def _save_fired(keys: set[str]) -> None:
@@ -398,20 +164,13 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_banner:
         print_logo()
 
-    hero = _ask_name()
-    tip = _ask_tip()
-    _ask_trivia(hero)
+    hero = "LINK"
     want = _ask_want(args.want)
     shops = _ask_shops(args.shops)
     interval = _ask_interval(args.interval)
     tries = _ask_tries(args.tries)
     hunting = ", ".join(ITEM_LABEL[i] for i in (CONSOLE, CONTROLLER) if i in want)
     shop_names = " · ".join(RETAILER_LABEL[s] for s in SHOP_IDS if s in shops)
-    print(f"  hero     {hero}")
-    if tip != "none":
-        print(f"  tip      {tip} for Bruce")
-    else:
-        print("  tip      0 rupees. Bruce got stiffed")
     print(f"  hunting  {hunting}")
     print(f"  shops    US only — {shop_names}")
     print(f"  scan every {interval:.0f}s   auto-add cooldown {args.hit_wait:.0f}s per store")
@@ -488,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  next scan in {wait:.0f}s\n")
             time.sleep(wait)
     except KeyboardInterrupt:
-        print(f"\n  stopped. ({hero} sheathed the sword.)")
+        print("\n  stopped.")
         return 0
 
 
