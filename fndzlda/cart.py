@@ -1,8 +1,7 @@
 """Open the default browser to add-to-cart / pre-order, then checkout.
 
-Best Buy: open the product page, click yellow Pre-Order via UI Automation,
-and if a Sold Out dialog appears, hit Close and retry up to `tries`.
-Fallback is the skuId add-to-cart URL if the button cannot be seen.
+Best Buy: open the product page and click Pre-Order once, then the store
+cools down like every other retailer. Fallback is the skuId add-to-cart URL.
 """
 from __future__ import annotations
 
@@ -148,11 +147,7 @@ def fire_browser(
 ) -> list[str]:
     cart = add_to_cart_url(hit.listing, hit.asin)
     check = checkout_url(hit.listing, hit.asin)
-    burst = max(1, int(tries))
-    if hit.listing.retailer == "bestbuy":
-        planned = [check, cart] * burst
-    else:
-        planned = [cart] if check == cart else [cart, check]
+    planned = [cart] if check == cart else [cart, check]
     if dry_run:
         return planned
     if cart in _opened_carts and not again:
@@ -162,19 +157,14 @@ def fire_browser(
         page = check or hit.listing.url or cart
         webbrowser.open(page, new=2)
         time.sleep(1.2)
-        for i in range(burst):
-            result = _bb_click_pass()
-            if result == "clicked":
-                print(f"      Best Buy Pre-Order click {i + 1}/{burst}")
-            elif result == "closed":
-                print(f"      Best Buy sold-out Close {i + 1}/{burst} — retrying")
-                time.sleep(0.35)
-                _bb_click_pass()
-            else:
-                webbrowser.open(cart, new=2)
-                print(f"      Best Buy Pre-Order URL {i + 1}/{burst} (button not seen)")
-            if i + 1 < burst:
-                time.sleep(0.9)
+        result = _bb_click_pass()
+        if result == "clicked":
+            print("      Best Buy Pre-Order clicked once")
+        elif result == "closed":
+            print("      Best Buy sold-out dialog closed — cooling down")
+        else:
+            webbrowser.open(cart, new=2)
+            print("      Best Buy Pre-Order button not seen — opened add-to-cart URL")
         return planned
     webbrowser.open(cart, new=2)
     if check != cart:

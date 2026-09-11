@@ -33,8 +33,6 @@ from fndzlda.update import check_and_apply
 STATE_PATH = Path.home() / ".fndzlda" / "hits.json"
 HIT_PAUSE = 120.0
 DEFAULT_INTERVAL = 20.0
-DEFAULT_TRIES = 8
-
 PROMPT = """
 Hunt which US Zelda 40th Anniversary Switch 2 items?
 
@@ -62,14 +60,6 @@ How many seconds between scans?
 
 Type a number in 5 second steps:  5  10  15  20  25  30  …
 Press Enter for 20.
-
-> """
-
-TRIES_PROMPT = """
-Best Buy hit — how many times in a row should I fire the yellow Pre-Order button?
-
-This burst happens once, then that store cools down (default 120s).
-Other stores keep scanning. Press Enter for 8.
 
 > """
 
@@ -155,27 +145,6 @@ def _ask_interval(preset: float | None) -> float:
         return snapped
 
 
-def _ask_tries(preset: int | None) -> int:
-    if preset is not None:
-        return max(1, min(40, int(preset)))
-    while True:
-        try:
-            raw = input(TRIES_PROMPT).strip().lower()
-        except EOFError:
-            return DEFAULT_TRIES
-        if not raw or raw in ("d", "default"):
-            return DEFAULT_TRIES
-        try:
-            val = int(float(raw))
-        except ValueError:
-            print("  type a whole number like 8")
-            continue
-        if val < 1:
-            print("  need at least 1")
-            continue
-        return max(1, min(40, val))
-
-
 def _save_fired(keys: set[str]) -> None:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     STATE_PATH.write_text(json.dumps({"fired": sorted(keys)}, indent=2), encoding="utf-8")
@@ -232,12 +201,6 @@ def main(argv: list[str] | None = None) -> int:
         default=HIT_PAUSE,
         help="per-store auto-add cooldown in seconds (default 120). other shops keep scanning",
     )
-    p.add_argument(
-        "--tries",
-        type=int,
-        default=None,
-        help="Best Buy Pre-Order clicks in a row on a hit (default 8). skips the question",
-    )
     p.add_argument("--once", action="store_true", help="scan once and exit")
     p.add_argument("--dry-run", action="store_true", help="print cart/checkout URLs, do not open a browser")
     p.add_argument(
@@ -266,13 +229,11 @@ def main(argv: list[str] | None = None) -> int:
     want = _ask_want(args.want)
     shops = _ask_shops(args.shops)
     interval = _ask_interval(args.interval)
-    tries = _ask_tries(args.tries)
     hunting = ", ".join(ITEM_LABEL[i] for i in (CONSOLE, CONTROLLER) if i in want)
     shop_names = " · ".join(RETAILER_LABEL[s] for s in SHOP_IDS if s in shops)
     print(f"  hunting  {hunting}")
     print(f"  shops    US only — {shop_names}")
     print(f"  scan every {interval:.0f}s   auto-add cooldown {args.hit_wait:.0f}s per store")
-    print(f"  Best Buy Pre-Order burst  {tries}x")
     print("  Ctrl+C to quit. Hits notify every time. Auto-add cools only that store.\n")
     play_hunt_theme()
 
@@ -326,12 +287,11 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"      -> {check_u}")
                     continue
                 ping(yell, msg)
-                burst = tries if retailer == "bestbuy" else 1
-                urls = fire_browser(hit, dry_run=args.dry_run, again=True, tries=burst)
+                urls = fire_browser(hit, dry_run=args.dry_run, again=True)
                 for u in urls:
                     print(f"      -> {u}")
                 if retailer == "bestbuy" and not args.dry_run:
-                    print(f"      Best Buy: Pre-Order button x{burst} (queue or cart)")
+                    print("      Best Buy: one Pre-Order click, then cooldown")
                 elif not args.dry_run:
                     print("      default browser: add-to-cart, then checkout")
                 fired.add(k)
