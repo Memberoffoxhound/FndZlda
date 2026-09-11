@@ -40,14 +40,21 @@ func main() {
 	fmt.Println("  It's dangerous to go alone! Setting up...")
 	fmt.Println()
 
-	n, err := extractApp(appDir)
-	if err != nil {
-		fail("could not unpack the hunter: %v", err)
+	mainPy := filepath.Join(appDir, "fndzlda", "__main__.py")
+	if _, err := os.Stat(mainPy); err == nil {
+		fmt.Println("  hunter already installed — leaving GitHub copy in place")
+	} else {
+		n, err := extractApp(appDir)
+		if err != nil {
+			fail("could not unpack the hunter: %v", err)
+		}
+		if n < 3 {
+			fail("hunter package missing after unpack (%d files in %s)", n, filepath.Join(appDir, "fndzlda"))
+		}
+		fmt.Printf("  unpacked %d hunter files\n", n)
+		// Force the first-run updater to pull main, not trust this EXE payload.
+		_ = os.Remove(filepath.Join(appDir, "fndzlda", ".commit"))
 	}
-	if n < 3 {
-		fail("hunter package missing after unpack (%d files in %s)", n, filepath.Join(appDir, "fndzlda"))
-	}
-	fmt.Printf("  unpacked %d hunter files\n", n)
 	downloadSounds(filepath.Join(appDir, "fndzlda"))
 
 	py, err := ensurePython(pyDir, appDir)
